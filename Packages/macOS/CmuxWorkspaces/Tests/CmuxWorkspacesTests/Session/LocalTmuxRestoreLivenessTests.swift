@@ -97,7 +97,7 @@ struct LocalTmuxRestoreLivenessTests {
         let gone = binding(sessionID: "$2")
         let elsewhere = binding(socket: "/tmp/cmux-other/server.sock")
         let probe = LocalTmuxRestoreLivenessProbe(
-            socketExists: { $0 == "/tmp/cmux-test/server.sock" },
+            socketPresence: { $0 == "/tmp/cmux-test/server.sock" ? .present : .absent },
             runner: { _, arguments, _ in
                 calls.arguments.append(arguments)
                 return LocalTmuxServerProbeOutcome(
@@ -141,6 +141,41 @@ struct LocalTmuxRestoreLivenessTests {
             sessionID: "$0"
         )
         #expect(LocalTmuxRestoreLivenessProbe().probe([target])[target] == .unknown)
+    }
+
+    @Test("socket presence distinguishes a missing entry from an inaccessible one")
+    func socketPresence() throws {
+        let directory = URL(fileURLWithPath: "/tmp", isDirectory: true)
+            .appendingPathComponent("cmux-lt-presence-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("server.sock")
+        #expect(LocalTmuxRestoreLivenessProbe.socketPresence(file.path) == .absent)
+        #expect(LocalTmuxRestoreLivenessProbe.socketPresence(
+            directory.appendingPathComponent("missing/server.sock").path
+        ) == .absent)
+        try Data().write(to: file)
+        #expect(LocalTmuxRestoreLivenessProbe.socketPresence(file.path) == .present)
+        // A path component that is a regular file cannot hold a socket.
+        #expect(LocalTmuxRestoreLivenessProbe.socketPresence(
+            file.appendingPathComponent("server.sock").path
+        ) == .absent)
+    }
+
+    @Test("an inaccessible socket is never probed and stays unknown")
+    func inaccessibleSocketUnknown() {
+        final class Calls: @unchecked Sendable { var count = 0 }
+        let calls = Calls()
+        let probe = LocalTmuxRestoreLivenessProbe(
+            socketPresence: { _ in .inaccessible },
+            runner: { _, _, _ in
+                calls.count += 1
+                return LocalTmuxServerProbeOutcome(socketExists: true, exitStatus: 1, standardError: "no server running on x\n")
+            }
+        )
+        let target = binding()
+        #expect(probe.probe([target])[target] == .unknown)
+        #expect(calls.count == 0)
     }
 
     @Test("an ended decision is permanent and unprobed bindings are unknown")

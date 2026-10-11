@@ -20,7 +20,7 @@ public struct LocalTmuxRestoreLivenessProbe: Sendable {
     ) -> LocalTmuxServerProbeOutcome
 
     private let timeout: TimeInterval
-    private let socketExists: @Sendable (String) -> Bool
+    private let socketPresence: @Sendable (String) -> LocalTmuxSocketPresence
     private let runner: Runner
     private let classifier = LocalTmuxRestoreLivenessClassifier()
 
@@ -29,16 +29,16 @@ public struct LocalTmuxRestoreLivenessProbe: Sendable {
     /// - Parameters:
     ///   - timeout: Deadline per server endpoint. Two seconds bounds startup
     ///     delay while comfortably covering a loaded but healthy server.
-    ///   - socketExists: Reports whether any filesystem entry exists at a
-    ///     socket path without following a final symbolic link.
+    ///   - socketPresence: Inspects a socket path without following a final
+    ///     symbolic link and without treating errors as absence.
     ///   - runner: Executes the tmux client; tests inject recorded outcomes.
     public init(
         timeout: TimeInterval = 2,
-        socketExists: @escaping @Sendable (String) -> Bool = LocalTmuxRestoreLivenessProbe.pathEntryExists,
+        socketPresence: @escaping @Sendable (String) -> LocalTmuxSocketPresence = LocalTmuxRestoreLivenessProbe.socketPresence,
         runner: @escaping Runner = LocalTmuxRestoreLivenessProbe.runProcess
     ) {
         self.timeout = timeout
-        self.socketExists = socketExists
+        self.socketPresence = socketPresence
         self.runner = runner
     }
 
@@ -53,24 +53,37 @@ public struct LocalTmuxRestoreLivenessProbe: Sendable {
         var result: [LocalTmuxRestoreBinding: LocalTmuxRestoreLiveness] = [:]
         for (endpoint, endpointBindings) in byEndpoint {
             var outcome: LocalTmuxServerProbeOutcome
-            if socketExists(endpoint.socketPath) {
+            switch socketPresence(endpoint.socketPath) {
+            case .present:
                 outcome = runner(endpoint.tmuxPath, endpoint.listSessionsArguments, timeout)
                 outcome.socketExists = true
-            } else {
+            case .absent:
                 outcome = LocalTmuxServerProbeOutcome(socketExists: false, launched: false)
+            case .inaccessible:
+                // An existing-or-unknown socket with no probe result: unknown.
+                outcome = LocalTmuxServerProbeOutcome(socketExists: true, launched: false)
             }
             result.merge(classifier.classify(Set(endpointBindings), outcome: outcome)) { _, new in new }
         }
         return result
     }
 
-    /// Reports whether a directory entry exists at `path`, including a dangling link.
+    /// Inspects a socket path with `lstat(2)`.
+    ///
+    /// Only `ENOENT` and `ENOTDIR` mean nothing can exist at the path. Every
+    /// other failure, such as `EACCES` on a parent directory, is reported as
+    /// ``LocalTmuxSocketPresence/inaccessible`` so the probe stays undecided.
     ///
     /// - Parameter path: Socket path to inspect.
-    /// - Returns: `true` when `lstat(2)` finds an entry.
+    /// - Returns: Whether an entry is present, absent, or could not be inspected.
     @Sendable
-    public static func pathEntryExists(_ path: String) -> Bool {
-        (try? FileManager.default.attributesOfItem(atPath: path)) != nil
+    public static func socketPresence(_ path: String) -> LocalTmuxSocketPresence {
+        var status = stat()
+        if lstat(path, &status) == 0 { return .present }
+        switch errno {
+        case ENOENT, ENOTDIR: return .absent
+        default: return .inaccessible
+        }
     }
 
     /// Runs a tmux client without inherited tmux client state and with a deadline.
