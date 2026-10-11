@@ -8,6 +8,19 @@ import Foundation
 /// marker and a server-incarnation-guarded attach shape; both are required here.
 struct LocalTmuxRestoreCommandPolicy: Sendable {
     func restorableCommand(_ rawCommand: String?) -> String? {
+        validated(rawCommand)?.command
+    }
+
+    /// Returns the tmux identity that a validated attach command targets.
+    ///
+    /// - Parameter rawCommand: The persisted terminal startup command.
+    /// - Returns: The executable, socket, server incarnation, and immutable
+    ///   session ID, or `nil` for anything except the canonical profile command.
+    func restorableBinding(_ rawCommand: String?) -> LocalTmuxRestoreBinding? {
+        validated(rawCommand)?.binding
+    }
+
+    private func validated(_ rawCommand: String?) -> (command: String, binding: LocalTmuxRestoreBinding)? {
         guard let command = rawCommand?.trimmingCharacters(in: .whitespacesAndNewlines),
               !command.isEmpty,
               !containsControlScalar(command) else {
@@ -49,7 +62,15 @@ struct LocalTmuxRestoreCommandPolicy: Sendable {
         guard (isCanonicalCommand && command == canonical)
             || (isLegacyCommand && command == legacyCanonical)
         else { return nil }
-        return canonical
+        return (
+            canonical,
+            LocalTmuxRestoreBinding(
+                tmuxPath: words[3],
+                socketPath: words[5],
+                serverID: serverID,
+                sessionID: sessionID
+            )
+        )
     }
 
     private func containsControlScalar(_ command: String) -> Bool {

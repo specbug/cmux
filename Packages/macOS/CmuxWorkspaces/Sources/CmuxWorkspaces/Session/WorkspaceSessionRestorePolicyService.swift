@@ -12,20 +12,33 @@ public struct WorkspaceSessionRestorePolicyService<Binding: WorkspaceSurfaceResu
     private let isRunningUnderAutomatedTests: @Sendable () -> Bool
     private let truncateScrollback: @Sendable (String?) -> String?
     private let hermesCodexEnvironment: WorkspaceHermesCodexEnvironment
+    private let localTmuxLiveness: @Sendable (LocalTmuxRestoreBinding) -> LocalTmuxRestoreLiveness
 
     /// Creates a restore policy service.
+    ///
+    /// - Parameters:
+    ///   - applyStoredApproval: Applies persisted approval state to a binding.
+    ///   - shouldRunPromptedSurfaceResume: Asks whether a prompted binding may run.
+    ///   - isRunningUnderAutomatedTests: Reports automated-test execution.
+    ///   - truncateScrollback: Bounds persisted scrollback.
+    ///   - hermesCodexEnvironment: Hermes Codex compatibility defaults.
+    ///   - localTmuxLiveness: Reports whether a persisted local-tmux binding can
+    ///     still reach its session. The default treats every binding as
+    ///     ``LocalTmuxRestoreLiveness/unknown``, which keeps the attach command.
     public init(
         applyStoredApproval: @escaping @Sendable (Binding, URL, Data?) -> Binding?,
         shouldRunPromptedSurfaceResume: @escaping @Sendable (Binding) -> Bool,
         isRunningUnderAutomatedTests: @escaping @Sendable () -> Bool,
         truncateScrollback: @escaping @Sendable (String?) -> String?,
-        hermesCodexEnvironment: WorkspaceHermesCodexEnvironment
+        hermesCodexEnvironment: WorkspaceHermesCodexEnvironment,
+        localTmuxLiveness: @escaping @Sendable (LocalTmuxRestoreBinding) -> LocalTmuxRestoreLiveness = { _ in .unknown }
     ) {
         self.applyStoredApproval = applyStoredApproval
         self.shouldRunPromptedSurfaceResume = shouldRunPromptedSurfaceResume
         self.isRunningUnderAutomatedTests = isRunningUnderAutomatedTests
         self.truncateScrollback = truncateScrollback
         self.hermesCodexEnvironment = hermesCodexEnvironment
+        self.localTmuxLiveness = localTmuxLiveness
     }
 
     /// Resolves the scrollback text persisted for a terminal snapshot.
@@ -184,6 +197,32 @@ public struct WorkspaceSessionRestorePolicyService<Binding: WorkspaceSurfaceResu
     public func localTmuxStartCommand(_ rawCommand: String?) -> String? {
         LocalTmuxRestoreCommandPolicy().restorableCommand(rawCommand)
             ?? LocalZellijRestoreCommandPolicy().restorableCommand(rawCommand)
+    }
+
+    /// Returns the tmux identity behind a cmux-generated local-tmux attach command.
+    ///
+    /// - Parameter rawCommand: The persisted terminal startup command.
+    /// - Returns: The binding, or `nil` for any other command.
+    public func localTmuxRestoreBinding(_ rawCommand: String?) -> LocalTmuxRestoreBinding? {
+        LocalTmuxRestoreCommandPolicy().restorableBinding(rawCommand)
+    }
+
+    /// Decides whether a restored terminal reattaches to its durable local owner.
+    ///
+    /// Snapshot capture keeps using ``localTmuxStartCommand(_:)``: a running
+    /// surface is attached by definition. Restore uses this method so a
+    /// local-tmux server that died with the machine no longer hides the
+    /// terminal's saved agent checkpoint behind an attach that must fail.
+    /// Undecided liveness keeps the attach command, which fails closed.
+    ///
+    /// - Parameter rawCommand: The persisted terminal startup command.
+    /// - Returns: The restore decision for that command.
+    public func localPersistentSessionRestore(_ rawCommand: String?) -> LocalPersistentSessionRestore {
+        if let binding = LocalTmuxRestoreCommandPolicy().restorableBinding(rawCommand),
+           localTmuxLiveness(binding) == .ended {
+            return .ended(binding)
+        }
+        return localTmuxStartCommand(rawCommand).map { .attach(command: $0) } ?? .none
     }
 
     /// Returns whether terminal scrollback should be persisted when closing/restoring.
