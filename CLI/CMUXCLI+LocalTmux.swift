@@ -13,6 +13,16 @@ extension CMUXCLI {
         idFormat: CLIIDFormat,
         windowOverride: String? = nil
     ) throws {
+        // Internal verb typed by session restore; not part of the public usage.
+        if commandArgs.first == LocalTmuxRecoveryCommand.subcommand[1] {
+            try runLocalTmuxRecovery(
+                arguments: Array(commandArgs.dropFirst()),
+                client: client,
+                jsonOutput: jsonOutput,
+                idFormat: idFormat
+            )
+            return
+        }
         var effectiveArguments = commandArgs
         if let windowOverride,
            !commandArgs.contains("--window"),
@@ -163,7 +173,7 @@ extension CMUXCLI {
         return true
     }
 
-    private func localTmuxRuntime(
+    func localTmuxRuntime(
         registry: LocalTmuxSessionRegistry
     ) throws -> (path: String, builder: LocalTmuxCommandBuilder, runner: LocalTmuxProcessRunner) {
         try registry.ensureSecureStorage()

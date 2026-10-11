@@ -438,7 +438,11 @@ extension DockSplitStore {
             && !agentSessionAlreadyActive
             ? restorableAgent?.resumeStartupInput(
                 restoringWorkingDirectory: resumeSessionWorkingDirectory
-            ).map(WorkspaceSurfaceResumeStartupLaunch.input)
+            ).map { input in
+                // An ended local-tmux session is recreated around the resume.
+                Workspace.localTmuxRecoveryLaunch(localSessionRestore, restorableAgent: restorableAgent)
+                    ?? .input(input)
+            }
             : nil
         // Build the candidate before arming the gate. A binding that is
         // disabled, unapproved, or cannot render a command must start as an

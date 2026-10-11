@@ -151,6 +151,12 @@ struct LocalTmuxCommandBuilder {
         )
     }
 
+    /// Removes a session by exact name. Used only for a session this CLI
+    /// created moments earlier whose identity could not be read back.
+    func killSessionArguments(sessionName: String) -> [String] {
+        ["-S", socketPath, "kill-session", "-t", exactTarget(sessionName)]
+    }
+
     private var sessionBindingFormat: String {
         "#{session_name}\t#{session_id}\t#{\(Self.serverIdentityOption)}\t#{session_created}"
     }

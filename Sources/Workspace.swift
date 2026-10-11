@@ -1191,6 +1191,25 @@ extension Workspace {
         return restorableAgent
     }
 
+    /// The typed launch that recreates an ended local-tmux session and resumes
+    /// its saved agent inside it, or `nil` to keep the plain resume.
+    nonisolated static func localTmuxRecoveryLaunch(
+        _ localSessionRestore: LocalPersistentSessionRestore,
+        restorableAgent: SessionRestorableAgentSnapshot?
+    ) -> SurfaceResumeStartupLaunch? {
+        guard case .ended(let binding) = localSessionRestore,
+              let restorableAgent,
+              let recovery = LocalTmuxRecoveryCommand(
+                  serverID: binding.serverID,
+                  sessionID: binding.sessionID,
+                  agentKind: restorableAgent.kind.rawValue,
+                  checkpointID: restorableAgent.sessionId
+              ) else {
+            return nil
+        }
+        return .input(recovery.typedInput)
+    }
+
     nonisolated private static func normalizedResumeBindingValue(_ value: String?) -> String? {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else {
@@ -1861,7 +1880,7 @@ extension Workspace {
                 )
                 return remoteRestoreClaim == nil
             }()
-            let restoredAgentResumeLaunch: SurfaceResumeStartupLaunch? =
+            let plainAgentResumeLaunch: SurfaceResumeStartupLaunch? =
                 if shouldAutoResumeAgent && restorableAgentCanAutoResume,
                    restoredHibernation == nil && restoredBindingLaunch == nil
                     && !agentSessionAlreadyActive {
@@ -1879,6 +1898,14 @@ extension Workspace {
                 } else {
                     nil
                 }
+            // A conversation whose local-tmux server is gone resumes inside a
+            // recreated session, so it survives the next quit or crash too.
+            let restoredAgentResumeLaunch = plainAgentResumeLaunch.map { launch in
+                Self.localTmuxRecoveryLaunch(
+                    localSessionRestore,
+                    restorableAgent: restoresRemoteWorkspaceTerminalSnapshot ? nil : restorableAgent
+                ) ?? launch
+            }
             if restoredAgentResumeLaunch == nil,
                let unusedClaim = remoteRestoreClaim,
                let restorableAgent {

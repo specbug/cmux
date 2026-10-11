@@ -647153,6 +647153,183 @@
           }
         }
       }
+    },
+    "cli.localTmux.recover.error.invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux recovery received invalid arguments; nothing was started"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تلقّت استعادة local-tmux وسيطات غير صالحة؛ لم يُشغَّل أي شيء"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die local-tmux-Wiederherstellung hat ungültige Argumente erhalten; es wurde nichts gestartet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La recuperación de local-tmux recibió argumentos no válidos; no se inició nada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La récupération local-tmux a reçu des arguments non valides ; rien n'a été démarré"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux の復旧に無効な引数が渡されました。何も起動していません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 복구가 잘못된 인수를 받았습니다. 아무것도 시작하지 않았습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 恢复收到无效参数；未启动任何内容"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 復原收到無效的引數；未啟動任何項目"
+          }
+        }
+      }
+    },
+    "cli.localTmux.recover.error.noSurface": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux recovery must run in the cmux terminal being restored"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يجب تشغيل استعادة local-tmux في طرفية cmux التي تتم استعادتها"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die local-tmux-Wiederherstellung muss im wiederhergestellten cmux-Terminal ausgeführt werden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La recuperación de local-tmux debe ejecutarse en la terminal de cmux que se está restaurando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La récupération local-tmux doit s'exécuter dans le terminal cmux en cours de restauration"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux の復旧は、復元中の cmux ターミナルで実行する必要があります"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 복구는 복원 중인 cmux 터미널에서 실행해야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 恢复必须在正在还原的 cmux 终端中运行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 復原必須在正在還原的 cmux 終端機中執行"
+          }
+        }
+      }
+    },
+    "cli.localTmux.recover.fallback": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux could not recreate this terminal's local-tmux session (%@). Resuming the saved conversation here without persistence."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر على cmux إعادة إنشاء جلسة local-tmux لهذه الطرفية (%@). تُستأنف المحادثة المحفوظة هنا دون استمرارية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux konnte die local-tmux-Sitzung dieses Terminals nicht neu erstellen (%@). Die gespeicherte Unterhaltung wird hier ohne Persistenz fortgesetzt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux no pudo volver a crear la sesión local-tmux de esta terminal (%@). La conversación guardada se reanuda aquí sin persistencia."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux n'a pas pu recréer la session local-tmux de ce terminal (%@). La conversation enregistrée reprend ici sans persistance."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux はこのターミナルの local-tmux セッションを再作成できませんでした（%@）。保存された会話を永続化なしでここで再開します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux가 이 터미널의 local-tmux 세션을 다시 만들 수 없습니다(%@). 저장된 대화를 지속성 없이 여기에서 재개합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux 无法重新创建此终端的 local-tmux 会话（%@）。已保存的对话将在此处恢复，但不具备持久性。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux 無法重新建立此終端機的 local-tmux 工作階段（%@）。已儲存的對話會在此處恢復，但不具持續性。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
