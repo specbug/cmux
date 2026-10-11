@@ -647035,6 +647035,124 @@
           }
         }
       }
+    },
+    "localTmux.restore.ended.checkpoint.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This terminal's local-tmux session is no longer running (for example, after a restart), so cmux started a new shell. Its saved agent conversation was not resumed automatically; run 'cmux restore --surface' to resume it here."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تعد جلسة local-tmux الخاصة بهذه الطرفية قيد التشغيل (على سبيل المثال بعد إعادة التشغيل)، لذلك بدأ cmux صدفة جديدة. لم تُستأنف محادثة الوكيل المحفوظة تلقائيًا؛ قم بتشغيل 'cmux restore --surface' لاستئنافها هنا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die local-tmux-Sitzung dieses Terminals läuft nicht mehr (zum Beispiel nach einem Neustart), daher hat cmux eine neue Shell gestartet. Die gespeicherte Agent-Unterhaltung wurde nicht automatisch fortgesetzt. Führen Sie 'cmux restore --surface' aus, um sie hier fortzusetzen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sesión local-tmux de esta terminal ya no se está ejecutando (por ejemplo, después de un reinicio), así que cmux inició un nuevo shell. Su conversación de agente guardada no se reanudó automáticamente; ejecute 'cmux restore --surface' para reanudarla aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La session local-tmux de ce terminal n'est plus en cours d'exécution (par exemple après un redémarrage), cmux a donc lancé un nouveau shell. Sa conversation d'agent enregistrée n'a pas été reprise automatiquement ; exécutez 'cmux restore --surface' pour la reprendre ici."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このターミナルの local-tmux セッションは実行されていないため（再起動後など）、cmux は新しいシェルを起動しました。保存されたエージェントの会話は自動的には再開されていません。このターミナルで再開するには「cmux restore --surface」を実行してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 터미널의 local-tmux 세션이 더 이상 실행 중이 아니므로(예: 재시동 후) cmux가 새 셸을 시작했습니다. 저장된 에이전트 대화는 자동으로 재개되지 않았습니다. 여기에서 재개하려면 'cmux restore --surface'를 실행하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此终端的 local-tmux 会话已不再运行（例如重启之后），因此 cmux 启动了一个新的 shell。已保存的代理对话没有自动恢复；请运行“cmux restore --surface”在此处恢复。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此終端機的 local-tmux 工作階段已不再執行（例如重新開機後），因此 cmux 已啟動新的 shell。已儲存的代理對話沒有自動恢復；請執行「cmux restore --surface」在此處恢復。"
+          }
+        }
+      }
+    },
+    "localTmux.restore.ended.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This terminal's local-tmux session is no longer running (for example, after a restart), so cmux started a new shell. No agent conversation was saved for this terminal, so nothing was resumed."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تعد جلسة local-tmux الخاصة بهذه الطرفية قيد التشغيل (على سبيل المثال بعد إعادة التشغيل)، لذلك بدأ cmux صدفة جديدة. لم تُحفظ أي محادثة وكيل لهذه الطرفية، لذلك لم يُستأنف أي شيء."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die local-tmux-Sitzung dieses Terminals läuft nicht mehr (zum Beispiel nach einem Neustart), daher hat cmux eine neue Shell gestartet. Für dieses Terminal wurde keine Agent-Unterhaltung gespeichert, daher wurde nichts fortgesetzt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sesión local-tmux de esta terminal ya no se está ejecutando (por ejemplo, después de un reinicio), así que cmux inició un nuevo shell. No se guardó ninguna conversación de agente para esta terminal, así que no se reanudó nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La session local-tmux de ce terminal n'est plus en cours d'exécution (par exemple après un redémarrage), cmux a donc lancé un nouveau shell. Aucune conversation d'agent n'a été enregistrée pour ce terminal, rien n'a donc été repris."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このターミナルの local-tmux セッションは実行されていないため（再起動後など）、cmux は新しいシェルを起動しました。このターミナルにはエージェントの会話が保存されていないため、何も再開されていません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 터미널의 local-tmux 세션이 더 이상 실행 중이 아니므로(예: 재시동 후) cmux가 새 셸을 시작했습니다. 이 터미널에 저장된 에이전트 대화가 없으므로 아무것도 재개되지 않았습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此终端的 local-tmux 会话已不再运行（例如重启之后），因此 cmux 启动了一个新的 shell。此终端没有保存任何代理对话，因此没有恢复任何内容。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此終端機的 local-tmux 工作階段已不再執行（例如重新開機後），因此 cmux 已啟動新的 shell。此終端機沒有儲存任何代理對話，因此沒有恢復任何內容。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

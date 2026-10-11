@@ -261,16 +261,16 @@ extension DockSplitStore {
                 detectedIsAmbiguous: detectedResumeBindingIsAmbiguous,
                 detectionUnavailable: resumeBindingDetectionUnavailable
             )
-            let restorableAgent = localTmuxStartCommand == nil
-                ? effectiveSessionRestorableAgent(
-                    panelId: panelId,
-                    observation: observation,
-                    resumeBinding: resumeBinding,
-                    managedResumeBinding: managedResumeBinding,
-                    terminal: terminal,
-                    transfer: transfer
-                )
-                : nil
+            // Local-tmux surfaces keep their agent checkpoint for restore to
+            // use only after the tmux owner is provably gone.
+            let restorableAgent = effectiveSessionRestorableAgent(
+                panelId: panelId,
+                observation: observation,
+                resumeBinding: resumeBinding,
+                managedResumeBinding: managedResumeBinding,
+                terminal: terminal,
+                transfer: transfer
+            )
             let agentCompatibilityBinding = managedResumeBinding ?? resumeBinding
             let hibernation = localTmuxStartCommand == nil
                 ? terminal.agentHibernationState.flatMap { state in
@@ -359,12 +359,17 @@ extension DockSplitStore {
                         lastActivityAt: $0.lastActivityAt.timeIntervalSince1970
                     )
                 } : nil,
-                resumeBinding: localTmuxStartCommand == nil ? resumeBinding : nil,
-                managedAgentResumeBinding: localTmuxStartCommand == nil ? managedResumeBinding : nil,
+                // A process-detected binding on a local-tmux surface only
+                // describes its tmux client; agent-hook identity describes
+                // the agent inside the session.
+                resumeBinding: localTmuxStartCommand == nil
+                    ? resumeBinding
+                    : resumeBinding.flatMap { $0.isAgentHookBinding ? $0 : nil },
+                managedAgentResumeBinding: managedResumeBinding,
                 textBoxDraft: terminal.sessionTextBoxDraftSnapshot(),
                 isRemoteTerminal: transfer?.isRemoteTerminal ?? false,
                 remotePTYSessionID: transfer?.remotePTYSessionID,
-                wasAgentRunning: localTmuxStartCommand == nil ? agentWasRunning : nil,
+                wasAgentRunning: agentWasRunning,
                 hasReceivedExplicitInput: terminal.hasReceivedExplicitInput,
                 claudeBackgroundViewer: localTmuxStartCommand == nil
                     ? claudeBackgroundViewerForSnapshot(
