@@ -117,6 +117,32 @@ struct LocalTmuxRestoreLivenessTests {
         ]])
     }
 
+    /// A socket the user cannot reach is not evidence that its server died.
+    /// Recording `ended` would be permanent for the app process and would
+    /// abandon the attach path for a server that may still be running.
+    @Test(
+        "an unreadable socket directory stays unknown",
+        .enabled(if: geteuid() != 0, "root bypasses directory permissions")
+    )
+    func unreadableSocketDirectoryUnknown() throws {
+        let directory = URL(fileURLWithPath: "/tmp", isDirectory: true)
+            .appendingPathComponent("cmux-lt-acl-\(UUID().uuidString.prefix(8))", isDirectory: true)
+        let locked = directory.appendingPathComponent("locked", isDirectory: true)
+        try FileManager.default.createDirectory(at: locked, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: locked.path)
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: locked.path)
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let target = LocalTmuxRestoreBinding(
+            tmuxPath: RealTmux.executable ?? "/usr/bin/tmux",
+            socketPath: locked.appendingPathComponent("server.sock").path,
+            serverID: serverID,
+            sessionID: "$0"
+        )
+        #expect(LocalTmuxRestoreLivenessProbe().probe([target])[target] == .unknown)
+    }
+
     @Test("an ended decision is permanent and unprobed bindings are unknown")
     func ledgerKeepsEnded() {
         let ledger = LocalTmuxRestoreLivenessLedger()
