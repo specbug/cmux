@@ -21,11 +21,12 @@ struct LocalTmuxProcessRunner {
     private let timedOutMessage: () -> String
 
     private let maxCapturedOutputBytes = 8 * 1024 * 1024
-    private let commandTimeout: TimeInterval = 30
+    private let commandTimeout: TimeInterval
 
     init(
         executablePath: String,
         environment: [String: String] = ProcessInfo.processInfo.environment,
+        commandTimeout: TimeInterval = 30,
         runFailedMessage: @escaping () -> String = {
             String(localized: "cli.localTmux.error.runFailed", defaultValue: "local-tmux could not run tmux")
         },
@@ -34,6 +35,7 @@ struct LocalTmuxProcessRunner {
         }
     ) {
         self.executablePath = executablePath
+        self.commandTimeout = commandTimeout
         self.runFailedMessage = runFailedMessage
         self.timedOutMessage = timedOutMessage
         var sanitized = environment

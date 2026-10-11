@@ -1,5 +1,6 @@
 import AppKit
 import CmuxCore
+import CmuxWorkspaces
 import Darwin
 import Foundation
 /// Live delivery-target resolution for agent hook events.
@@ -332,6 +333,37 @@ extension AppDelegate {
         return liveAgentDeliveryTarget(for: evidence, resolution: resolution)
     }
 
+    /// The unique live terminal attached to a local-tmux session.
+    ///
+    /// An agent inside the profile server runs on a tmux PTY, so its process
+    /// cannot identify a cmux surface. The surface showing the session is the
+    /// one whose cmux-generated attach command names the same server
+    /// incarnation and immutable session ID. Two clients of one session are
+    /// ambiguous and yield `nil` rather than a guess.
+    func liveLocalTmuxClientTarget(serverID: UUID, sessionID: String) -> AgentDeliveryTargetCandidate? {
+        let policy = Workspace.makeSessionRestorePolicyService()
+        var matches: [AgentDeliveryTargetCandidate] = []
+        func collect(workspaceId: UUID, panels: [UUID: any Panel]) {
+            for (panelId, panel) in panels {
+                guard let terminal = panel as? TerminalPanel,
+                      let binding = policy.localTmuxRestoreBinding(terminal.surface.debugTmuxStartCommand()),
+                      binding.serverID == serverID,
+                      binding.sessionID == sessionID else { continue }
+                matches.append(AgentDeliveryTargetCandidate(workspaceId: workspaceId, surfaceId: panelId))
+            }
+        }
+        for manager in agentDeliveryTabManagers() {
+            for workspace in manager.tabs where !workspace.isRemoteWorkspace {
+                collect(workspaceId: workspace.id, panels: workspace.panels)
+            }
+        }
+        for dock in DockSplitStore.liveStores {
+            collect(workspaceId: dock.workspaceId, panels: dock.panels)
+        }
+        guard matches.count == 1 else { return nil }
+        return matches[0]
+    }
+
     /// Current local terminal ownership across both workspace splits and Docks.
     /// Internal so behavior tests can guard the cross-container ownership
     /// boundary without needing to manufacture a process on Ghostty's PTY.
@@ -476,6 +508,32 @@ extension TerminalController {
                 "surface_id": target.surfaceId.uuidString,
                 "source": "tty",
                 "tty_resolution": ttyResolution,
+            ])
+        }
+        if params.keys.contains("local_tmux_session_id") || params.keys.contains("local_tmux_server_id") {
+            // Local-only: the relay routing schema rejects these keys, and a
+            // relay-stamped request is refused here as well.
+            guard params["_cmux_remote_workspace_id"] == nil,
+                  let serverID = v2UUID(params, "local_tmux_server_id"),
+                  let sessionID = params["local_tmux_session_id"] as? String,
+                  sessionID.range(of: "^\\$[0-9]+$", options: .regularExpression) != nil,
+                  let target = appDelegate.liveLocalTmuxClientTarget(
+                      serverID: serverID,
+                      sessionID: sessionID
+                  ) else {
+                return .err(
+                    code: "not_found",
+                    message: String(
+                        localized: "agent.deliveryTarget.error.notFound",
+                        defaultValue: "No live delivery target"
+                    ),
+                    data: nil
+                )
+            }
+            return .ok([
+                "workspace_id": target.workspaceId.uuidString,
+                "surface_id": target.surfaceId.uuidString,
+                "source": "local_tmux",
             ])
         }
         if params.keys.contains("pid") {

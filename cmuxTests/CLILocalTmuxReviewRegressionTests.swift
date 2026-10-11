@@ -1,3 +1,4 @@
+import CMUXAgentLaunch
 import Darwin
 import XCTest
 
@@ -114,6 +115,34 @@ extension CLINotifyProcessIntegrationRegressionTests {
         let action = try String(contentsOf: actionOutputURL, encoding: .utf8)
             .split(separator: "\n", omittingEmptySubsequences: false).dropLast().map(String.init)
         XCTAssertEqual(action, ["attach-session", "-t", "$7"])
+    }
+
+    /// The profile server starts from a sanitized environment. Without the
+    /// integration allowlist an agent inside the session never loads cmux's
+    /// wrapper, so its hooks never fire and no checkpoint is ever saved.
+    func testLocalTmuxNewSessionCarriesOnlyIntegrationEnvironment() {
+        let builder = LocalTmuxCommandBuilder(tmuxPath: "/opt/homebrew/bin/tmux", socketPath: "/tmp/lt/server.sock")
+        let arguments = builder.newSessionArguments(
+            sessionName: "work",
+            workingDirectory: "/tmp/project with space",
+            command: "npm run dev",
+            environment: LocalTmuxSessionEnvironment(environment: [
+                "CMUX_SURFACE_ID": "11111111-1111-4111-8111-111111111111",
+                "CMUX_SOCKET_PATH": "/tmp/cmux.sock",
+                "CMUX_SOCKET_PASSWORD": "secret",
+                "CMUX_CLAUDE_WRAPPER_SHIM": "/tmp/shims/claude",
+            ])
+        )
+        XCTAssertEqual(Array(arguments.suffix(3)), ["/bin/sh", "-lc", "npm run dev"])
+        let workingDirectoryIndex = try? XCTUnwrap(arguments.firstIndex(of: "/tmp/project with space"))
+        let environmentArguments = Array(arguments[(workingDirectoryIndex ?? 0) + 1 ..< arguments.count - 3])
+        XCTAssertEqual(environmentArguments, [
+            "-e", "CMUX_CLAUDE_WRAPPER_SHIM=/tmp/shims/claude",
+            "-e", "CMUX_PANEL_ID=11111111-1111-4111-8111-111111111111",
+            "-e", "CMUX_SOCKET_PATH=/tmp/cmux.sock",
+            "-e", "CMUX_SURFACE_ID=11111111-1111-4111-8111-111111111111",
+        ])
+        XCTAssertFalse(arguments.contains { $0.contains("secret") })
     }
 
     func testLocalTmuxClientListingUsesPopulatedTTYTarget() throws {

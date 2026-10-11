@@ -1,3 +1,4 @@
+import CMUXAgentLaunch
 import Darwin
 import Foundation
 
@@ -252,7 +253,12 @@ extension CMUXCLI {
 
         let cwd = try requestedCwd ?? localTmuxWorkingDirectory(nil)
         _ = try runner.requireSuccess(
-            builder.newSessionArguments(sessionName: name, workingDirectory: cwd, command: invocation.command),
+            builder.newSessionArguments(
+                sessionName: name,
+                workingDirectory: cwd,
+                command: invocation.command,
+                environment: LocalTmuxSessionEnvironment(environment: ProcessInfo.processInfo.environment)
+            ),
             context: "start"
         )
         let observed = try identityResolver.observedSession(named: name)
