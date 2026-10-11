@@ -3876,19 +3876,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// Restore must choose between reattaching and resuming a saved agent
     /// before the terminal starts: typing a resume command into a pane that
     /// turns out to be attached to a running agent would leak it into the
-    /// agent's input. The probe runs `tmux list-sessions` once per socket off
-    /// the main thread with a bounded deadline. Any restore that runs before
-    /// it finishes sees `unknown` and keeps today's guarded attach.
+    /// agent's input. Any restore that runs before the probe finishes sees
+    /// `unknown` and keeps today's guarded attach.
     private func beginStartupLocalTmuxLivenessProbeIfNeeded() {
         guard !isWaitingForStartupLocalTmuxLivenessProbe,
-              let snapshot = startupSessionSnapshot else { return }
+              let snapshot = startupSessionSnapshot,
+              let probe = localTmuxRestoreLivenessProbe(for: snapshot) else { return }
+        isWaitingForStartupLocalTmuxLivenessProbe = true
+        Task { @MainActor [weak self] in
+            await probe.value
+            guard let self else { return }
+            self.isWaitingForStartupLocalTmuxLivenessProbe = false
+            self.resumeDeferredInitialMainWindowBootstrapIfNeeded()
+        }
+    }
+
+    /// Probes a snapshot's local-tmux sockets off the main thread and records
+    /// the results in ``localTmuxRestoreLiveness``.
+    ///
+    /// Every restore entry point that builds terminals from a snapshot calls
+    /// this first: startup restore and Reopen Previous Session. The probe
+    /// runs `tmux list-sessions` once per socket with a bounded deadline.
+    ///
+    /// - Returns: The probe task, or `nil` when the snapshot has no local-tmux binding.
+    func localTmuxRestoreLivenessProbe(for snapshot: AppSessionSnapshot) -> Task<Void, Never>? {
         let bindings = LocalTmuxStartupRestoreBindings(
             policy: Workspace.makeSessionRestorePolicyService()
         ).bindings(in: snapshot)
-        guard !bindings.isEmpty else { return }
-        isWaitingForStartupLocalTmuxLivenessProbe = true
+        guard !bindings.isEmpty else { return nil }
         let ledger = Self.localTmuxRestoreLiveness
-        Task { @MainActor [weak self] in
+        return Task { @MainActor in
             let results = await Task.detached(priority: .userInitiated) {
                 LocalTmuxRestoreLivenessProbe().probe(bindings)
             }.value
@@ -3902,9 +3919,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                     "unknown": String(results.values.filter { $0 == .unknown }.count),
                 ]
             )
-            guard let self else { return }
-            self.isWaitingForStartupLocalTmuxLivenessProbe = false
-            self.resumeDeferredInitialMainWindowBootstrapIfNeeded()
         }
     }
 
@@ -4255,9 +4269,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         _ snapshot: AppSessionSnapshot,
         shouldActivate: Bool = true
     ) -> Bool {
-        guard let snapshot = SessionPersistencePolicy.pruningCmuxCrashDiagnosticWindows(from: snapshot).snapshot else {
+        guard let snapshot = SessionPersistencePolicy.pruningCmuxCrashDiagnosticWindows(from: snapshot).snapshot,
+              !snapshot.windows.isEmpty else {
             return false
         }
+        // A reopen after a reboot needs the same liveness decision as startup
+        // restore, or every dead local-tmux pane would replay its attach.
+        if let probe = localTmuxRestoreLivenessProbe(for: snapshot) {
+            Task { @MainActor [weak self] in
+                await probe.value
+                _ = self?.applyPreviousSessionSnapshot(snapshot, shouldActivate: shouldActivate)
+            }
+            return true
+        }
+        return applyPreviousSessionSnapshot(snapshot, shouldActivate: shouldActivate)
+    }
+
+    @discardableResult
+    private func applyPreviousSessionSnapshot(
+        _ snapshot: AppSessionSnapshot,
+        shouldActivate: Bool
+    ) -> Bool {
         let snapshotWindows = Array(
             snapshot.windows.prefix(SessionPersistencePolicy.maxWindowsPerSnapshot)
         )
