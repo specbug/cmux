@@ -16,12 +16,15 @@ struct LocalTmuxSessionEnvironmentTests {
             "CMUX_TERMINAL_LIFECYCLE_ID": "lifecycle",
             "CMUX_HISTORY_FILE": "/tmp/history",
             "CLAUDE_CONFIG_DIR": "/Users/test/.claude-work",
+            "CMUX_LOCAL_TMUX_STATE_DIR": "/Users/test/custom-state",
             "PATH": "/usr/bin",
         ])
         #expect(selected.variables.map(\.key) == [
             "CMUX_BUNDLED_CLI_PATH",
             "CMUX_CLAUDE_WRAPPER_SHIM",
             "CMUX_CLAUDE_WRAPPER_SHIM_ROOT",
+            "CMUX_LOCAL_TMUX",
+            "CMUX_LOCAL_TMUX_STATE_DIR",
             "CMUX_PANEL_ID",
             "CMUX_SOCKET_PATH",
             "CMUX_SURFACE_ID",
@@ -40,6 +43,7 @@ struct LocalTmuxSessionEnvironmentTests {
         ])
         let values = Dictionary(uniqueKeysWithValues: selected.variables.map { ($0.key, $0.value) })
         #expect(values == [
+            "CMUX_LOCAL_TMUX": "1",
             "CMUX_SURFACE_ID": "panel",
             "CMUX_PANEL_ID": "panel",
             "CMUX_WORKSPACE_ID": "tab",
@@ -54,7 +58,7 @@ struct LocalTmuxSessionEnvironmentTests {
             "CMUX_SOCKET_PATH": "/tmp/a\n/tmp/b",
             "CMUX_BUNDLED_CLI_PATH": String(repeating: "a", count: 5000),
         ])
-        #expect(selected.variables.isEmpty)
-        #expect(selected.newSessionArguments.isEmpty)
+        #expect(selected.variables.map(\.key) == ["CMUX_LOCAL_TMUX"])
+        #expect(selected.newSessionArguments == ["-e", "CMUX_LOCAL_TMUX=1"])
     }
 }

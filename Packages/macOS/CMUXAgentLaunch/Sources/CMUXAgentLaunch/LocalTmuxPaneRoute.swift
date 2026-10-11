@@ -11,7 +11,7 @@ public import Foundation
 /// surface currently showing the session.
 ///
 /// ```swift
-/// if let route = LocalTmuxPaneRoute(environment: env, profileSocketPath: socket) {
+/// if let route = LocalTmuxPaneRoute(environment: env) {
 ///     let output = run(tmux, route.displayArguments)
 ///     let identity = route.identity(fromDisplayOutput: output)
 /// }
@@ -25,19 +25,31 @@ public struct LocalTmuxPaneRoute: Equatable, Sendable {
         public let sessionID: String
     }
 
-    /// The profile server socket the pane belongs to.
+    /// Environment keys a hook must keep to be routed by tmux identity.
+    ///
+    /// Queued hook delivery stores only an allowlist of the hook process
+    /// environment; these keys must be part of it.
+    public static let routingEnvironmentKeys = [
+        "TMUX", "TMUX_PANE",
+        LocalTmuxSessionEnvironment.markerKey,
+        "CMUX_LOCAL_TMUX_STATE_DIR", "CMUX_LOCAL_TMUX_BIN",
+    ]
+
+    /// The tmux server socket the pane belongs to, from `TMUX`.
     public let socketPath: String
     /// The tmux pane ID, such as `%5`.
     public let paneID: String
-
-    /// Recognizes a process environment inside the local-tmux profile server.
+    /// Whether the pane's session was created by the cmux local-tmux profile.
     ///
-    /// - Parameters:
-    ///   - environment: The hook process environment, inherited from the agent.
-    ///   - profileSocketPath: The local-tmux profile's server socket.
-    /// - Returns: `nil` outside tmux, inside another tmux server, or when the
-    ///   variables are malformed.
-    public init?(environment: [String: String], profileSocketPath: String) {
+    /// This is an inherited hint used only to decide whether asking tmux is
+    /// worthwhile; ownership is decided by the server's own marker.
+    public let carriesProfileMarker: Bool
+
+    /// Recognizes a process environment inside any tmux pane.
+    ///
+    /// - Parameter environment: The hook process environment, inherited from the agent.
+    /// - Returns: `nil` outside tmux or when the variables are malformed.
+    public init?(environment: [String: String]) {
         guard let tmux = environment["TMUX"],
               let pane = environment["TMUX_PANE"],
               pane.range(of: "^%[0-9]+$", options: .regularExpression) != nil else {
@@ -49,12 +61,18 @@ public struct LocalTmuxPaneRoute: Equatable, Sendable {
         guard fields.count >= 3 else { return nil }
         fields.removeLast(2)
         let socket = fields.joined(separator: ",")
-        guard socket.hasPrefix("/"),
-              Self.standardized(socket) == Self.standardized(profileSocketPath) else {
-            return nil
-        }
-        self.socketPath = profileSocketPath
+        guard socket.hasPrefix("/") else { return nil }
+        self.socketPath = socket
         self.paneID = pane
+        self.carriesProfileMarker = environment[LocalTmuxSessionEnvironment.markerKey] == "1"
+    }
+
+    /// Whether the pane's server listens on `path`.
+    ///
+    /// - Parameter path: A socket path, such as the default profile socket.
+    /// - Returns: `true` when both paths standardize to the same file path.
+    public func isOnSocket(_ path: String) -> Bool {
+        Self.standardized(socketPath) == Self.standardized(path)
     }
 
     /// Arguments that read the pane's session ID and server marker.

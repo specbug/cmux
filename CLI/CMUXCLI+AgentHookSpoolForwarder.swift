@@ -119,8 +119,11 @@ extension CMUXCLI {
     /// The hook environment values admission reads, in producer order.
     static func agentHookSpoolEnvironmentKeys(agent: String) -> [String] {
         var seen = Set<String>()
+        // The tmux keys never reach the app; admission uses them to route a
+        // hook from a local-tmux pane by tmux identity.
         return (queuedAgentHookDataEnvironmentKeys(agent: agent)
-            + AgentLaunchEnvironmentPolicy().inputEnvironmentKeys)
+            + AgentLaunchEnvironmentPolicy().inputEnvironmentKeys
+            + LocalTmuxPaneRoute.routingEnvironmentKeys)
             .filter { seen.insert($0).inserted }
     }
 
@@ -217,12 +220,22 @@ extension CMUXCLI {
             return
         }
         var environment = record.environment
-        if agentExited,
-           let surfaceID = environment["CMUX_SURFACE_ID"],
-           UUID(uuidString: surfaceID) != nil {
-            // The agent PID no longer identifies its terminal. Deliver by the
-            // surface instead, which the app re-homes if the pane moved.
-            environment[Self.agentHookRouteSnapshotEnvironmentKey] = "1"
+        if agentExited {
+            if case .managed(let binding) = localTmuxHookRouting(
+                processEnvironment: environment,
+                client: client,
+                socketPassword: socketPassword
+            ) {
+                // A local-tmux pane's inherited surface names whichever
+                // surface created the session. Its tmux identity still
+                // resolves after the agent exits.
+                Self.applyLocalTmuxHookRoute(binding, to: &environment)
+            } else if let surfaceID = environment["CMUX_SURFACE_ID"],
+                      UUID(uuidString: surfaceID) != nil {
+                // The agent PID no longer identifies its terminal. Deliver by the
+                // surface instead, which the app re-homes if the pane moved.
+                environment[Self.agentHookRouteSnapshotEnvironmentKey] = "1"
+            }
         }
         try admitQueuedAgentHook(
             agent: record.agent,

@@ -138,6 +138,7 @@ extension CLINotifyProcessIntegrationRegressionTests {
         let environmentArguments = Array(arguments[(workingDirectoryIndex ?? 0) + 1 ..< arguments.count - 3])
         XCTAssertEqual(environmentArguments, [
             "-e", "CMUX_CLAUDE_WRAPPER_SHIM=/tmp/shims/claude",
+            "-e", "CMUX_LOCAL_TMUX=1",
             "-e", "CMUX_PANEL_ID=11111111-1111-4111-8111-111111111111",
             "-e", "CMUX_SOCKET_PATH=/tmp/cmux.sock",
             "-e", "CMUX_SURFACE_ID=11111111-1111-4111-8111-111111111111",

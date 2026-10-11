@@ -20,7 +20,8 @@ struct AgentHookSpoolTests {
         _ spool: AgentHookSpoolDirectory,
         subcommand: String,
         payload: Data,
-        fallback: String = "printf FALLBACK; /bin/cat"
+        fallback: String = "printf FALLBACK; /bin/cat",
+        environment extraEnvironment: [String: String] = [:]
     ) throws -> String {
         let command = AgentHookSpoolProducer(agent: "claude").command(subcommand: subcommand, fallback: fallback)
         let process = Process()
@@ -30,7 +31,7 @@ struct AgentHookSpoolTests {
             "PATH": "/usr/bin:/bin",
             "CMUX_SURFACE_ID": "22222222-2222-2222-2222-222222222222",
             "CMUX_CLAUDE_HOOK_SPOOL_DIR": spool.url.path,
-        ]
+        ].merging(extraEnvironment) { _, extra in extra }
         let input = Pipe()
         let output = Pipe()
         process.standardInput = input
@@ -80,6 +81,39 @@ struct AgentHookSpoolTests {
         #expect(record.environment["PWD"] != nil)
         #expect(record.environment["UNSET_KEY"] == nil)
         #expect(record.environment["lower"] == nil)
+    }
+
+    /// A hook from a local-tmux pane is routed by the pane's tmux identity.
+    /// Queued delivery admits from the stored record, so the record itself
+    /// must carry the pane's tmux variables and profile selectors.
+    @Test("A local-tmux pane's routing variables survive queued delivery")
+    func localTmuxRoutingKeysSurviveSpool() throws {
+        let spool = try makeSpool()
+        defer { spool.removeAll() }
+        #expect(spool.publishEnvironmentKeys(
+            ["CMUX_SURFACE_ID", "CMUX_CLAUDE_PID"] + LocalTmuxPaneRoute.routingEnvironmentKeys
+        ))
+        let lifetime = try #require(spool.lock(AgentHookSpoolDirectory.forwarderLockName, blocking: false))
+        let socket = "/Users/test/custom state/server.sock"
+        _ = try runHook(
+            spool,
+            subcommand: "session-start",
+            payload: Data("{}".utf8),
+            environment: [
+                "TMUX": "\(socket),4821,0",
+                "TMUX_PANE": "%7",
+                "CMUX_LOCAL_TMUX": "1",
+                "CMUX_LOCAL_TMUX_STATE_DIR": "/Users/test/custom state",
+            ]
+        )
+        let published = records(spool)
+        withExtendedLifetime(lifetime) {}
+        let record = try #require(published.first)
+        let route = try #require(LocalTmuxPaneRoute(environment: record.environment))
+        #expect(route.socketPath == socket)
+        #expect(route.paneID == "%7")
+        #expect(route.carriesProfileMarker)
+        #expect(record.environment["CMUX_LOCAL_TMUX_STATE_DIR"] == "/Users/test/custom state")
     }
 
     @Test("Without a forwarder the producer reclaims its record and falls back with the full payload")

@@ -6,7 +6,8 @@ import Foundation
 /// variables an agent inside the session neither loads cmux's wrapper nor
 /// reports hooks, and cmux can never save a resumable checkpoint for it. The
 /// set is an explicit allowlist: the control socket path, bundled CLI, agent
-/// wrapper shims, and the cmux surface identity. Socket passwords and any
+/// wrapper shims, the cmux surface identity, and the profile's state
+/// directory and tmux selectors, plus ``markerKey``. Socket passwords and any
 /// other inherited `CMUX_*` state are excluded.
 ///
 /// Identity values describe the surface that created the session and are only
@@ -23,8 +24,18 @@ public struct LocalTmuxSessionEnvironment: Equatable, Sendable {
         "CMUX_BUNDLED_CLI_PATH",
         "CMUX_CLAUDE_INTEGRATION_DISABLED",
         "CMUX_AGENT_COMMAND_SHIM_ROOT",
+        // Profile selectors: hooks and `cmux local-tmux` inside the session
+        // must address the same state directory and tmux client.
+        "CMUX_LOCAL_TMUX_STATE_DIR",
+        "CMUX_LOCAL_TMUX_BIN",
     ]
     private static let maximumValueBytes = 4096
+
+    /// Marks panes of sessions the local-tmux profile created.
+    ///
+    /// Its value is always `1`. It lets a hook skip tmux queries for panes of
+    /// unrelated tmux servers; ownership is still decided by the server marker.
+    public static let markerKey = "CMUX_LOCAL_TMUX"
 
     /// Selected variables, sorted by name.
     public let variables: [(key: String, value: String)]
@@ -46,6 +57,7 @@ public struct LocalTmuxSessionEnvironment: Equatable, Sendable {
                 selected[alias] = value
             }
         }
+        selected[Self.markerKey] = "1"
         variables = selected.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
     }
 
