@@ -116,10 +116,18 @@ cmux's existing agent integration and **Settings → Terminal → Resume Agent S
    saved agent data is not used, nothing is typed into the pane, and an
    unknown binding still fails closed. For an ended binding whose agent was
    still running, the pane starts a fresh login shell that runs
-   `cmux local-tmux __recover`. It recreates the session (same name and
-   registry record when the name is free, a suffixed name otherwise),
-   switches the pane to the new attach command, and only once that client
-   attaches does the new session's first pane run
+   `cmux local-tmux __recover`. It works in the profile the saved attach
+   command named (its tmux executable and socket, so a custom
+   `CMUX_LOCAL_TMUX_STATE_DIR` or `CMUX_LOCAL_TMUX_BIN` carries over) and,
+   under a profile-wide recovery lock, recreates the session: same name and
+   registry record when the name is free, a suffixed name otherwise, never a
+   live session that merely reuses the name. The record remembers which dead
+   sessions it replaced, so every pane that showed the same session joins
+   the one replacement instead of creating another. The recovering process
+   then records the new attach command on its pane and becomes that pane's
+   tmux client in place; the pane is not respawned, so its saved restore
+   record is still there when, only after that client attaches, the new
+   session's first pane runs
    `cmux restore --surface <surface> <agent> <conversation-id>`. The resume
    goes through the usual restore admission, single-launch lease,
    working-directory check, and profile handling, and the pane keeps a login
