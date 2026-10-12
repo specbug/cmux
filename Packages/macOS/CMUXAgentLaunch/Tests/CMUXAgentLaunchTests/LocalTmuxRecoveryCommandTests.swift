@@ -5,38 +5,53 @@ import Testing
 @Suite("LocalTmuxRecoveryCommand")
 struct LocalTmuxRecoveryCommandTests {
     private let serverID = UUID(uuidString: "6B1B7C55-9C55-4C55-8C55-6B1B7C559C55")!
+    private let tmux = "/opt/homebrew/bin/tmux"
+    private let socket = "/Users/a b/custom-state/server.sock"
 
-    @Test("typed input round-trips through the CLI parser")
+    private func command(
+        sessionID: String = "$1",
+        agentKind: String = "claude",
+        checkpointID: String = "x",
+        tmuxPath: String? = nil,
+        socketPath: String? = nil
+    ) -> LocalTmuxRecoveryCommand? {
+        LocalTmuxRecoveryCommand(
+            tmuxPath: tmuxPath ?? tmux, socketPath: socketPath ?? socket,
+            serverID: serverID, sessionID: sessionID, agentKind: agentKind, checkpointID: checkpointID
+        )
+    }
+
+    @Test("typed input carries the original profile and round-trips through the CLI parser")
     func roundTrip() throws {
-        let command = try #require(LocalTmuxRecoveryCommand(
-            serverID: serverID, sessionID: "$12", agentKind: "claude", checkpointID: "0b6f1c3e-7d4a-4e2b-9a1f-2c3d4e5f6a7b"
-        ))
-        #expect(command.typedInput == " cmux 'local-tmux' '__recover' '--server-id' '6b1b7c55-9c55-4c55-8c55-6b1b7c559c55' '--session-id' '$12' '--agent' 'claude' '--checkpoint' '0b6f1c3e-7d4a-4e2b-9a1f-2c3d4e5f6a7b'\n")
-        #expect(LocalTmuxRecoveryCommand(arguments: command.arguments) == command)
+        let recovery = try #require(command(sessionID: "$12", checkpointID: "0b6f1c3e-7d4a-4e2b-9a1f-2c3d4e5f6a7b"))
+        #expect(recovery.typedInput == " cmux 'local-tmux' '__recover' '--tmux' '/opt/homebrew/bin/tmux' '--socket' '/Users/a b/custom-state/server.sock' '--server-id' '6b1b7c55-9c55-4c55-8c55-6b1b7c559c55' '--session-id' '$12' '--agent' 'claude' '--checkpoint' '0b6f1c3e-7d4a-4e2b-9a1f-2c3d4e5f6a7b'\n")
+        #expect(LocalTmuxRecoveryCommand(arguments: recovery.arguments) == recovery)
     }
 
     @Test("unsafe or incomplete values are rejected")
     func rejectsUnsafe() {
-        #expect(LocalTmuxRecoveryCommand(serverID: serverID, sessionID: "work", agentKind: "claude", checkpointID: "x") == nil)
-        #expect(LocalTmuxRecoveryCommand(serverID: serverID, sessionID: "$1", agentKind: "claude; rm", checkpointID: "x") == nil)
-        #expect(LocalTmuxRecoveryCommand(serverID: serverID, sessionID: "$1", agentKind: "codex", checkpointID: "-x") == nil)
-        #expect(LocalTmuxRecoveryCommand(arguments: ["--server-id", serverID.uuidString, "--session-id", "$1", "--agent", "codex"]) == nil)
-        #expect(LocalTmuxRecoveryCommand(arguments: [
-            "--server-id", serverID.uuidString, "--session-id", "$1", "--agent", "codex",
-            "--checkpoint", "a", "--checkpoint", "b",
-        ]) == nil)
+        #expect(command(sessionID: "work") == nil)
+        #expect(command(agentKind: "claude; rm") == nil)
+        #expect(command(checkpointID: "-x") == nil)
+        #expect(command(tmuxPath: "tmux") == nil)
+        #expect(command(tmuxPath: "/opt/it's/tmux") == nil)
+        #expect(command(socketPath: "/tmp/other.sock") == nil)
+        #expect(command(socketPath: "/tmp/a/../server.sock") == nil)
+        #expect(command(socketPath: "/tmp/line\nbreak/server.sock") == nil)
+        let complete = command()!.arguments
+        #expect(LocalTmuxRecoveryCommand(arguments: Array(complete.dropLast(2))) == nil)
+        #expect(LocalTmuxRecoveryCommand(arguments: complete + ["--checkpoint", "b"]) == nil)
         #expect(LocalTmuxRecoveryCommand(arguments: ["--bogus", "1"]) == nil)
     }
 
     @Test("the pane waits for an attach, resumes the exact conversation, then keeps a shell")
     func paneCommand() throws {
-        let command = try #require(LocalTmuxRecoveryCommand(
-            serverID: serverID, sessionID: "$0", agentKind: "codex", checkpointID: "019a-thread"
+        let recovery = try #require(command(
+            sessionID: "$0", agentKind: "codex", checkpointID: "019a-thread",
+            socketPath: "/Users/a b/.cmux/local-tmux/server.sock"
         ))
         let surface = UUID(uuidString: "11111111-2222-4333-8444-555555555555")!
-        let pane = command.paneCommand(
-            tmuxPath: "/opt/homebrew/bin/tmux",
-            socketPath: "/Users/a b/.cmux/local-tmux/server.sock",
+        let pane = recovery.paneCommand(
             cliPath: "/Applications/cmux.app/Contents/Resources/bin/cmux",
             surfaceID: surface,
             channel: "cmux-recover-x"
@@ -66,13 +81,12 @@ struct LocalTmuxRecoveryCommandRealTmuxTests {
         try "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '\(log.path)'\n".write(to: fakeCLI, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeCLI.path)
         let command = try #require(LocalTmuxRecoveryCommand(
+            tmuxPath: tmux, socketPath: socket,
             serverID: UUID(), sessionID: "$0", agentKind: "claude", checkpointID: "conversation-1"
         ))
         let surface = UUID()
         let channel = LocalTmuxRecoveryCommand.attachChannel(nonce: UUID())
-        let pane = command.paneCommand(
-            tmuxPath: tmux, socketPath: socket, cliPath: fakeCLI.path, surfaceID: surface, channel: channel
-        )
+        let pane = command.paneCommand(cliPath: fakeCLI.path, surfaceID: surface, channel: channel)
         let created = RecoveryTmux.run(tmux, [
             "-f", "/dev/null", "-S", socket, "new-session", "-d", "-s", "work", "/bin/sh", "-lc", pane,
         ] + LocalTmuxRecoveryCommand.attachHookArguments(channel: channel), captureOutput: false)

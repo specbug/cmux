@@ -1200,6 +1200,8 @@ extension Workspace {
         guard case .ended(let binding) = localSessionRestore,
               let restorableAgent,
               let recovery = LocalTmuxRecoveryCommand(
+                  tmuxPath: binding.tmuxPath,
+                  socketPath: binding.socketPath,
                   serverID: binding.serverID,
                   sessionID: binding.sessionID,
                   agentKind: restorableAgent.kind.rawValue,
