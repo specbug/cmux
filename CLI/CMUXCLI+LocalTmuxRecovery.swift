@@ -6,11 +6,13 @@ extension CMUXCLI {
     /// `cmux local-tmux __recover`, typed by session restore into the fresh
     /// shell of a terminal whose local-tmux server is gone.
     ///
-    /// It recreates the terminal's persistent session and resumes the saved
-    /// conversation inside it, so the recovered agent survives the next app
-    /// quit or crash. When persistence cannot be recreated, the conversation
-    /// is resumed in this terminal instead; `cmux restore` enforces the same
-    /// single-launch admission either way.
+    /// It recreates the terminal's persistent session in the original profile
+    /// and becomes the terminal's tmux client, so the recovered conversation
+    /// survives the next app quit or crash. The terminal is never respawned:
+    /// respawning would discard the restore record that the replacement pane's
+    /// `cmux restore --surface` needs. When persistence cannot be recreated,
+    /// the conversation is resumed in this terminal instead; `cmux restore`
+    /// enforces the same single-launch admission either way.
     func runLocalTmuxRecovery(
         arguments: [String],
         client: SocketClient,
@@ -37,9 +39,7 @@ extension CMUXCLI {
                 surfaceID: surfaceID,
                 workspaceID: workspaceID,
                 environment: environment,
-                client: client,
-                jsonOutput: jsonOutput,
-                idFormat: idFormat
+                client: client
             )
         } catch {
             FileHandle.standardError.write(Data((String.localizedStringWithFormat(
@@ -58,115 +58,50 @@ extension CMUXCLI {
         surfaceID: UUID,
         workspaceID: UUID,
         environment: [String: String],
-        client: SocketClient,
-        jsonOutput: Bool,
-        idFormat: CLIIDFormat
+        client: SocketClient
     ) throws {
-        let registry = LocalTmuxSessionRegistry.live()
-        let (_, builder, runner) = try localTmuxRuntime(registry: registry)
-        let resolver = LocalTmuxSessionIdentityResolver(registry: registry, builder: builder, runner: runner)
-        let previous = try registry.load().first {
-            $0.tmuxBinding?.serverID == recovery.serverID
-                && $0.tmuxBinding?.sessionID.rawValue == recovery.sessionID
-        }
-        // Responding to the respawn closes this terminal's PTY.
-        signal(SIGHUP, SIG_IGN)
-        signal(SIGPIPE, SIG_IGN)
-        let request = LocalSessionAttachRequest(
-            workspace: workspaceID.uuidString,
-            surface: surfaceID.uuidString,
-            pane: nil,
-            window: nil,
-            focus: false
+        // The persisted attach command named the profile: its socket's
+        // directory is the registry, and its tmux binary owns the server.
+        let registry = LocalTmuxSessionRegistry(
+            rootURL: URL(fileURLWithPath: recovery.socketPath).deletingLastPathComponent()
         )
-        // Restore saw this session as gone. If it is somehow live again,
-        // reattach to it rather than start a second copy of its work.
-        if let previous, case .live(let session)? = try? resolver.resolve(previous) {
-            try attachLocalPersistentSession(
-                record: session.record,
-                attachCommand: builder.attachCommand(binding: session.binding),
-                socketPath: builder.socketPath,
-                request: request,
-                profile: .localTmux,
-                registry: registry,
-                client: client,
-                jsonOutput: jsonOutput,
-                idFormat: idFormat
-            )
-            return
-        }
-
-        // Never adopt a live session that merely reuses the old name.
-        let baseName = previous?.name ?? "recovered-\(surfaceID.uuidString.prefix(8).lowercased())"
-        var name = baseName
-        if try runner.run(arguments: builder.hasSessionArguments(name)).succeeded {
-            name = "\(baseName)-\(UUID().uuidString.prefix(6).lowercased())"
-        }
-        name = try LocalTmuxSessionNameValidator().validate(name)
-        var cwd = FileManager.default.currentDirectoryPath
-        var isDirectory = ObjCBool(false)
-        if let saved = previous?.cwd,
-           FileManager.default.fileExists(atPath: saved, isDirectory: &isDirectory),
-           isDirectory.boolValue {
-            cwd = saved
-        }
-
-        let channel = LocalTmuxRecoveryCommand.attachChannel(nonce: UUID())
-        let paneCommand = recovery.paneCommand(
-            tmuxPath: builder.tmuxPath,
-            socketPath: builder.socketPath,
-            cliPath: localTmuxRecoveryCLIPath(environment: environment),
+        let (_, builder, runner) = try localTmuxRuntime(registry: registry, tmuxPath: recovery.tmuxPath)
+        let planner = LocalTmuxSessionRecovery(registry: registry, builder: builder, runner: runner)
+        let prepared = try planner.prepare(
+            recovery,
             surfaceID: surfaceID,
-            channel: channel
+            cliPath: localTmuxRecoveryCLIPath(environment: environment),
+            environment: environment,
+            workingDirectory: FileManager.default.currentDirectoryPath
         )
-        _ = try runner.requireSuccess(
-            builder.newSessionArguments(
-                sessionName: name,
-                workingDirectory: cwd,
-                command: paneCommand,
-                environment: LocalTmuxSessionEnvironment(environment: environment)
-            ) + LocalTmuxRecoveryCommand.attachHookArguments(channel: channel),
-            context: "start"
-        )
-        let observed: LocalTmuxSessionIdentityResolver.ObservedSession
         do {
-            observed = try resolver.observedSession(named: name)
-        } catch {
-            _ = try? runner.run(arguments: builder.killSessionArguments(sessionName: name))
-            throw error
-        }
-        do {
-            _ = try? runner.requireSuccess(
-                builder.historyLimitArguments(binding: observed.binding),
-                context: "configure history"
-            )
-            // Keep the logical record (and its ID) when the name is unchanged;
-            // a renamed replacement gets its own record and the old one stays
-            // stale for `cleanup`.
-            var record = previous.flatMap { $0.name == name ? $0 : nil }
-                ?? LocalTmuxSessionRecord(name: name, socketPath: builder.socketPath, cwd: cwd)
-            record.tmuxBinding = observed.binding
-            record.socketPath = builder.socketPath
-            record.cwd = cwd
-            record.updatedAt = Date.now.timeIntervalSince1970
-            try registry.upsert(record)
-            try attachLocalPersistentSession(
-                record: record,
-                attachCommand: builder.attachCommand(binding: observed.binding),
-                socketPath: builder.socketPath,
-                request: request,
-                profile: .localTmux,
-                registry: registry,
-                client: client,
-                jsonOutput: jsonOutput,
-                idFormat: idFormat
+            // Record the new attach command on this terminal in place; its
+            // panel, restore record, and agent checkpoint stay untouched.
+            _ = try client.sendV2(method: "surface.local_tmux_adopt", params: [
+                "workspace_id": workspaceID.uuidString,
+                "surface_id": surfaceID.uuidString,
+                "tmux_start_command": builder.attachCommand(binding: prepared.binding),
+            ])
+            _ = try? registry.recordAttachment(
+                id: prepared.record.id,
+                workspaceID: workspaceID.uuidString,
+                workspaceTitle: prepared.record.workspaceTitle,
+                surfaceID: surfaceID.uuidString
             )
         } catch {
-            // The replacement pane is still waiting for an attach; remove it
-            // so it cannot start a second resume later.
-            _ = try? runner.run(arguments: builder.killSessionArguments(binding: observed.binding))
+            planner.discard(prepared)
             throw error
         }
+        client.close()
+        // Become the terminal's tmux client, exactly as its attach command
+        // would on the next restore. Attaching releases the waiting pane.
+        unsetenv("TMUX")
+        setenv("CMUX_LOCAL_TMUX", "1", 1)
+        var cArguments = ([builder.tmuxPath] + builder.attachArguments(binding: prepared.binding))
+            .map { strdup($0) } + [nil]
+        execv(builder.tmuxPath, &cArguments)
+        planner.discard(prepared)
+        throw CLIError(message: String(cString: strerror(errno)))
     }
 
     /// The bundled CLI that the replacement pane runs `restore` with.

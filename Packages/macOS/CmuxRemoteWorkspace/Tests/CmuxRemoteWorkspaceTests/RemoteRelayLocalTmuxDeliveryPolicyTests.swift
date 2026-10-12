@@ -60,4 +60,31 @@ struct RemoteRelayLocalTmuxDeliveryPolicyTests {
         #expect(authorize(bare) != .allowed)
         #expect(try evaluate(bare) != .allow)
     }
+
+    /// Recording a local-tmux attach command on a surface is local-only: a
+    /// relay could otherwise point a local terminal's next restore at a
+    /// session on this Mac.
+    @Test("surface.local_tmux_adopt is denied by both relay gates")
+    func adoptDenied() throws {
+        let surface = UUID()
+        var parameters: [String: Any] = [
+            "workspace_id": owner.uuidString,
+            "surface_id": surface.uuidString,
+            "tmux_start_command": "/usr/bin/env TMUX= CMUX_LOCAL_TMUX=1 '/usr/bin/tmux' -S '/tmp/x/server.sock' if-shell -F 'c' 'a' 'run-shell false'",
+        ]
+        var stamped = parameters
+        stamped[RemoteRelayAuthorizationPolicy.remoteWorkspaceIDKey] = owner.uuidString
+        #expect(RemoteRelayAuthorizationPolicy().validate(
+            method: "surface.local_tmux_adopt",
+            parameters: stamped,
+            ownerWorkspaceID: owner,
+            surfaceIDs: [surface]
+        ) != .allowed)
+        parameters["surface_id"] = surface.uuidString
+        let request: [String: Any] = ["id": "adopt", "method": "surface.local_tmux_adopt", "params": parameters]
+        let line = try JSONSerialization.data(withJSONObject: request)
+        #expect(RemoteRelayCommandPolicy().evaluate(
+            commandLine: line, workspaceAliases: [owner: owner], surfaceAliases: [surface: surface]
+        ) != .allow)
+    }
 }

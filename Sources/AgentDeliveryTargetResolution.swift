@@ -340,6 +340,23 @@ extension AppDelegate {
     /// one whose cmux-generated attach command names the same server
     /// incarnation and immutable session ID. Two clients of one session are
     /// ambiguous and yield `nil` rather than a guess.
+    /// The live local terminal panel with this surface ID, in a workspace or Dock.
+    func liveTerminalPanel(surfaceID: UUID, preferredWorkspaceID: UUID?) -> TerminalPanel? {
+        var matches: [TerminalPanel] = []
+        for manager in agentDeliveryTabManagers() {
+            for workspace in manager.tabs where !workspace.isRemoteWorkspace {
+                if let terminal = workspace.panels[surfaceID] as? TerminalPanel {
+                    if workspace.id == preferredWorkspaceID { return terminal }
+                    matches.append(terminal)
+                }
+            }
+        }
+        for dock in DockSplitStore.liveStores {
+            if let terminal = dock.panels[surfaceID] as? TerminalPanel { matches.append(terminal) }
+        }
+        return matches.count == 1 ? matches[0] : nil
+    }
+
     func liveLocalTmuxClientTarget(serverID: UUID, sessionID: String) -> AgentDeliveryTargetCandidate? {
         let policy = Workspace.makeSessionRestorePolicyService()
         var matches: [AgentDeliveryTargetCandidate] = []

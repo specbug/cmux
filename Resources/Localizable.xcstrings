@@ -647330,6 +647330,124 @@
           }
         }
       }
+    },
+    "surface.localTmuxAdopt.error.invalidParams": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id and a cmux-generated local-tmux attach command are required"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يلزم surface_id وأمر إرفاق local-tmux أنشأه cmux"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id und ein von cmux erzeugter local-tmux-Attach-Befehl sind erforderlich"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se requieren surface_id y un comando de conexión de local-tmux generado por cmux"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id et une commande d'attachement local-tmux générée par cmux sont requis"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id と cmux が生成した local-tmux のアタッチコマンドが必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id와 cmux가 생성한 local-tmux 연결 명령이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要 surface_id 和由 cmux 生成的 local-tmux 附加命令"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要 surface_id 和由 cmux 產生的 local-tmux 附加指令"
+          }
+        }
+      }
+    },
+    "surface.localTmuxAdopt.error.notFound": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No local terminal surface with that ID"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد سطح طرفية محلي بهذا المعرّف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine lokale Terminal-Oberfläche mit dieser ID"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay ninguna superficie de terminal local con ese ID"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune surface de terminal locale avec cet identifiant"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "その ID のローカルターミナルサーフェスはありません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해당 ID의 로컬 터미널 화면이 없습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有具有此 ID 的本地终端界面"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有具有此 ID 的本機終端機介面"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -188,7 +188,23 @@ public final class TerminalSurface: Identifiable, ObservableObject {
     public let initialCommand: String?
 
     /// The tmux bootstrap command captured for respawn, if any.
-    public let tmuxStartCommand: String?
+    ///
+    /// Fixed at creation, except that local-tmux cold recovery records the
+    /// replacement session's attach command through
+    /// ``adoptLocalPersistentAttachCommand(_:)``.
+    public private(set) var tmuxStartCommand: String?
+
+    /// Records the attach command of a local persistent session this
+    /// terminal's process has become a client of.
+    ///
+    /// Only session snapshots and live-client lookups read the value; the
+    /// running process is not changed. Callers validate that the command is
+    /// a cmux-generated attach command before adopting it.
+    ///
+    /// - Parameter command: The canonical attach command.
+    public func adoptLocalPersistentAttachCommand(_ command: String) {
+        tmuxStartCommand = command
+    }
 
     /// Startup text retained until the shell reports readiness.
     public let initialInput: String?

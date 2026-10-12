@@ -173,14 +173,19 @@ extension CMUXCLI {
         return true
     }
 
+    /// - Parameter tmuxPath: A tmux executable fixed by a persisted attach
+    ///   command (cold recovery); otherwise resolved from the environment.
     func localTmuxRuntime(
-        registry: LocalTmuxSessionRegistry
+        registry: LocalTmuxSessionRegistry,
+        tmuxPath fixedTmuxPath: String? = nil
     ) throws -> (path: String, builder: LocalTmuxCommandBuilder, runner: LocalTmuxProcessRunner) {
         try registry.ensureSecureStorage()
         try registry.validateServerSocketIfPresent()
         let environment = ProcessInfo.processInfo.environment
         let path: String?
-        if let override = environment["CMUX_LOCAL_TMUX_BIN"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let fixedTmuxPath {
+            path = fixedTmuxPath
+        } else if let override = environment["CMUX_LOCAL_TMUX_BIN"]?.trimmingCharacters(in: .whitespacesAndNewlines),
            !override.isEmpty {
             path = URL(fileURLWithPath: resolvePath(override)).standardizedFileURL.path
         } else {
