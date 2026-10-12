@@ -76,11 +76,81 @@ This is not persistence through a machine shutdown. Logout, restart, shutdown,
 forced power loss, or a killed tmux server terminates the local process, its
 children, live PTY state, and in-memory scrollback. The registry file may still
 be present, but the server marker deliberately no longer matches, so reattach
-fails closed instead of attaching to an unrelated replacement. Recreating the
-commands after login would be a separate resurrection feature and cannot
-restore process memory, an SSH connection, or exact scrollback. For continuity
-while this Mac is offline, run the owner on a remote host with `cmux ssh-tmux`,
+fails closed instead of attaching to an unrelated replacement. No process
+memory, SSH connection, or exact scrollback survives. For continuity while this
+Mac is offline, run the owner on a remote host with `cmux ssh-tmux`,
 `cmux mosh-tmux`, or a persistent cloud VM.
+
+### Agent recovery after the server is gone
+
+A Claude Code or Codex conversation running inside a local-tmux session can
+still be resumed after the server is gone. Nothing needs to be enabled beyond
+cmux's existing agent integration and **Settings → Terminal → Resume Agent Sessions on Reopen**.
+
+1. **Checkpoint.** New sessions receive cmux's agent-integration variables
+   (control socket path, bundled CLI, agent wrapper shims, surface identity;
+   never the socket password), so the agent's hooks report to cmux. Hooks from
+   inside the profile server are attributed by tmux identity: the pane's
+   immutable session ID and the server marker, read from the pane's own tmux
+   server (so a custom `CMUX_LOCAL_TMUX_STATE_DIR` works), are matched against
+   the attach command of the surface currently showing that session. This
+   also holds for hook events delivered after the agent exited. The inherited
+   `CMUX_SURFACE_ID`/`CMUX_PANEL_ID`/`CMUX_WORKSPACE_ID`/`CMUX_TAB_ID` values
+   only describe the surface that created the session and are not used for
+   attribution. If no surface or more than one surface shows the session, the
+   hook is not attributed rather than guessed. The session snapshot then keeps
+   the exact agent, conversation ID, working directory, launch environment
+   (including an explicit `CLAUDE_CONFIG_DIR` or `CODEX_HOME`, and leaving an
+   unset one unset), and whether the agent was still running, next to the
+   attach command.
+2. **Decision before the terminal starts.** Before automatic restore or
+   **Reopen Previous Session** builds terminals, cmux asks each profile socket
+   once (`tmux list-sessions`, which never starts a server, bounded to two
+   seconds). A binding is *live* only when the same server marker still hosts
+   the same `$N` session. It is *ended* when nothing exists at the socket
+   path, tmux reports that no server is listening (including the stale socket
+   a reboot leaves behind), or a different server answers. Anything else
+   (timeout, permission error, missing tmux next to an existing socket) is
+   *unknown*.
+3. **Restore.** Live and unknown bindings reattach exactly as before; the
+   saved agent data is not used, nothing is typed into the pane, and an
+   unknown binding still fails closed. For an ended binding whose agent was
+   still running, the pane starts a fresh login shell that runs
+   `cmux local-tmux __recover`. It works in the profile the saved attach
+   command named (its tmux executable and socket, so a custom
+   `CMUX_LOCAL_TMUX_STATE_DIR` or `CMUX_LOCAL_TMUX_BIN` carries over) and,
+   under a profile-wide recovery lock, recreates the session: same name and
+   registry record when the name is free, a suffixed name otherwise, never a
+   live session that merely reuses the name. The record remembers which dead
+   sessions it replaced, so every pane that showed the same session joins
+   the one replacement instead of creating another. The recovering process
+   then records the new attach command on its pane and becomes that pane's
+   tmux client in place; the pane is not respawned, so its saved restore
+   record is still there when, only after that client attaches, the new
+   session's first pane runs
+   `cmux restore --surface <surface> <agent> <conversation-id>`. The resume
+   goes through the usual restore admission, single-launch lease,
+   working-directory check, and profile handling, and the pane keeps a login
+   shell after the agent exits. The recovered conversation is therefore
+   persistent again: the next quit or crash reattaches to it, and the next
+   restart recovers it the same way. If the session cannot be recreated, the
+   conversation is resumed in the pane without persistence and the pane says
+   why. A conversation that had already exited, or whose automatic resume is
+   turned off, is not restarted; the pane says so and suggests
+   `cmux restore --surface`. A pane with no saved conversation says that
+   nothing was resumed instead of presenting an empty shell as a recovery.
+
+Recovery resumes the saved conversation; it does not restore process memory or
+repeat earlier tool actions. A missing working directory, executable, or
+account is reported by `cmux restore` and the checkpoint is kept for a retry;
+cmux never substitutes another checkout or starts a new conversation.
+Snapshots written by earlier cmux versions carry no agent data for local-tmux
+panes and recover only a shell, with the notice above.
+
+Terminals that enter tmux on their own (for example from a shell startup
+file) are not covered: cmux cannot verify which server or session such a
+process-detected `tmux attach` refers to, so it replays that command as
+before. Use `cmux local-tmux` for terminals that should be recoverable.
 
 ## Discovery, cleanup, and safety
 

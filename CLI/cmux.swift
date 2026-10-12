@@ -5046,7 +5046,9 @@ struct CMUXCLI {
 
         // Registry inspection, cleanup, and direct headless attach must keep
         // working while the GUI is quit (including during an app update).
-        if command == "local-tmux" || command == "tmux" {
+        // `__recover` is typed by session restore and always needs the app.
+        if command == "tmux"
+            || (command == "local-tmux" && commandArgs.first != LocalTmuxRecoveryCommand.subcommand[1]) {
             let invocation = try LocalTmuxInvocation.parse(commandArgs)
             if command == "tmux", invocation.action != .attach {
                 throw CLIError(message: String(

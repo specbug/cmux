@@ -647035,6 +647035,419 @@
           }
         }
       }
+    },
+    "localTmux.restore.ended.checkpoint.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This terminal's local-tmux session is no longer running (for example, after a restart), so cmux started a new shell. Its saved agent conversation was not resumed automatically; run 'cmux restore --surface' to resume it here."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تعد جلسة local-tmux الخاصة بهذه الطرفية قيد التشغيل (على سبيل المثال بعد إعادة التشغيل)، لذلك بدأ cmux صدفة جديدة. لم تُستأنف محادثة الوكيل المحفوظة تلقائيًا؛ قم بتشغيل 'cmux restore --surface' لاستئنافها هنا."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die local-tmux-Sitzung dieses Terminals läuft nicht mehr (zum Beispiel nach einem Neustart), daher hat cmux eine neue Shell gestartet. Die gespeicherte Agent-Unterhaltung wurde nicht automatisch fortgesetzt. Führen Sie 'cmux restore --surface' aus, um sie hier fortzusetzen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sesión local-tmux de esta terminal ya no se está ejecutando (por ejemplo, después de un reinicio), así que cmux inició un nuevo shell. Su conversación de agente guardada no se reanudó automáticamente; ejecute 'cmux restore --surface' para reanudarla aquí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La session local-tmux de ce terminal n'est plus en cours d'exécution (par exemple après un redémarrage), cmux a donc lancé un nouveau shell. Sa conversation d'agent enregistrée n'a pas été reprise automatiquement ; exécutez 'cmux restore --surface' pour la reprendre ici."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このターミナルの local-tmux セッションは実行されていないため（再起動後など）、cmux は新しいシェルを起動しました。保存されたエージェントの会話は自動的には再開されていません。このターミナルで再開するには「cmux restore --surface」を実行してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 터미널의 local-tmux 세션이 더 이상 실행 중이 아니므로(예: 재시동 후) cmux가 새 셸을 시작했습니다. 저장된 에이전트 대화는 자동으로 재개되지 않았습니다. 여기에서 재개하려면 'cmux restore --surface'를 실행하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此终端的 local-tmux 会话已不再运行（例如重启之后），因此 cmux 启动了一个新的 shell。已保存的代理对话没有自动恢复；请运行“cmux restore --surface”在此处恢复。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此終端機的 local-tmux 工作階段已不再執行（例如重新開機後），因此 cmux 已啟動新的 shell。已儲存的代理對話沒有自動恢復；請執行「cmux restore --surface」在此處恢復。"
+          }
+        }
+      }
+    },
+    "localTmux.restore.ended.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This terminal's local-tmux session is no longer running (for example, after a restart), so cmux started a new shell. No agent conversation was saved for this terminal, so nothing was resumed."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لم تعد جلسة local-tmux الخاصة بهذه الطرفية قيد التشغيل (على سبيل المثال بعد إعادة التشغيل)، لذلك بدأ cmux صدفة جديدة. لم تُحفظ أي محادثة وكيل لهذه الطرفية، لذلك لم يُستأنف أي شيء."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die local-tmux-Sitzung dieses Terminals läuft nicht mehr (zum Beispiel nach einem Neustart), daher hat cmux eine neue Shell gestartet. Für dieses Terminal wurde keine Agent-Unterhaltung gespeichert, daher wurde nichts fortgesetzt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sesión local-tmux de esta terminal ya no se está ejecutando (por ejemplo, después de un reinicio), así que cmux inició un nuevo shell. No se guardó ninguna conversación de agente para esta terminal, así que no se reanudó nada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La session local-tmux de ce terminal n'est plus en cours d'exécution (par exemple après un redémarrage), cmux a donc lancé un nouveau shell. Aucune conversation d'agent n'a été enregistrée pour ce terminal, rien n'a donc été repris."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このターミナルの local-tmux セッションは実行されていないため（再起動後など）、cmux は新しいシェルを起動しました。このターミナルにはエージェントの会話が保存されていないため、何も再開されていません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 터미널의 local-tmux 세션이 더 이상 실행 중이 아니므로(예: 재시동 후) cmux가 새 셸을 시작했습니다. 이 터미널에 저장된 에이전트 대화가 없으므로 아무것도 재개되지 않았습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此终端的 local-tmux 会话已不再运行（例如重启之后），因此 cmux 启动了一个新的 shell。此终端没有保存任何代理对话，因此没有恢复任何内容。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此終端機的 local-tmux 工作階段已不再執行（例如重新開機後），因此 cmux 已啟動新的 shell。此終端機沒有儲存任何代理對話，因此沒有恢復任何內容。"
+          }
+        }
+      }
+    },
+    "cli.localTmux.recover.error.invalid": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux recovery received invalid arguments; nothing was started"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تلقّت استعادة local-tmux وسيطات غير صالحة؛ لم يُشغَّل أي شيء"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die local-tmux-Wiederherstellung hat ungültige Argumente erhalten; es wurde nichts gestartet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La recuperación de local-tmux recibió argumentos no válidos; no se inició nada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La récupération local-tmux a reçu des arguments non valides ; rien n'a été démarré"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux の復旧に無効な引数が渡されました。何も起動していません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 복구가 잘못된 인수를 받았습니다. 아무것도 시작하지 않았습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 恢复收到无效参数；未启动任何内容"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 復原收到無效的引數；未啟動任何項目"
+          }
+        }
+      }
+    },
+    "cli.localTmux.recover.error.noSurface": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux recovery must run in the cmux terminal being restored"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يجب تشغيل استعادة local-tmux في طرفية cmux التي تتم استعادتها"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die local-tmux-Wiederherstellung muss im wiederhergestellten cmux-Terminal ausgeführt werden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La recuperación de local-tmux debe ejecutarse en la terminal de cmux que se está restaurando"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La récupération local-tmux doit s'exécuter dans le terminal cmux en cours de restauration"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux の復旧は、復元中の cmux ターミナルで実行する必要があります"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 복구는 복원 중인 cmux 터미널에서 실행해야 합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 恢复必须在正在还原的 cmux 终端中运行"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "local-tmux 復原必須在正在還原的 cmux 終端機中執行"
+          }
+        }
+      }
+    },
+    "cli.localTmux.recover.fallback": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux could not recreate this terminal's local-tmux session (%@). Resuming the saved conversation here without persistence."
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر على cmux إعادة إنشاء جلسة local-tmux لهذه الطرفية (%@). تُستأنف المحادثة المحفوظة هنا دون استمرارية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux konnte die local-tmux-Sitzung dieses Terminals nicht neu erstellen (%@). Die gespeicherte Unterhaltung wird hier ohne Persistenz fortgesetzt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux no pudo volver a crear la sesión local-tmux de esta terminal (%@). La conversación guardada se reanuda aquí sin persistencia."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux n'a pas pu recréer la session local-tmux de ce terminal (%@). La conversation enregistrée reprend ici sans persistance."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux はこのターミナルの local-tmux セッションを再作成できませんでした（%@）。保存された会話を永続化なしでここで再開します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux가 이 터미널의 local-tmux 세션을 다시 만들 수 없습니다(%@). 저장된 대화를 지속성 없이 여기에서 재개합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux 无法重新创建此终端的 local-tmux 会话（%@）。已保存的对话将在此处恢复，但不具备持久性。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cmux 無法重新建立此終端機的 local-tmux 工作階段（%@）。已儲存的對話會在此處恢復，但不具持續性。"
+          }
+        }
+      }
+    },
+    "surface.localTmuxAdopt.error.invalidParams": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id and a cmux-generated local-tmux attach command are required"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يلزم surface_id وأمر إرفاق local-tmux أنشأه cmux"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id und ein von cmux erzeugter local-tmux-Attach-Befehl sind erforderlich"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se requieren surface_id y un comando de conexión de local-tmux generado por cmux"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id et une commande d'attachement local-tmux générée par cmux sont requis"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id と cmux が生成した local-tmux のアタッチコマンドが必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "surface_id와 cmux가 생성한 local-tmux 연결 명령이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要 surface_id 和由 cmux 生成的 local-tmux 附加命令"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要 surface_id 和由 cmux 產生的 local-tmux 附加指令"
+          }
+        }
+      }
+    },
+    "surface.localTmuxAdopt.error.notFound": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No local terminal surface with that ID"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا يوجد سطح طرفية محلي بهذا المعرّف"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine lokale Terminal-Oberfläche mit dieser ID"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay ninguna superficie de terminal local con ese ID"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune surface de terminal locale avec cet identifiant"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "その ID のローカルターミナルサーフェスはありません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해당 ID의 로컬 터미널 화면이 없습니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有具有此 ID 的本地终端界面"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有具有此 ID 的本機終端機介面"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -928,6 +928,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     /// diagnostic notification and the rare missing-primary recovery probe.
     private var pendingCrashScanTask: Task<GhosttyCrashBreadcrumb.PendingCrash?, Never>?
     private var isWaitingForStartupCrashRecoveryProbe = false
+    /// Holds the first main-window bootstrap while the startup snapshot's
+    /// local-tmux servers are probed off the main thread.
+    private var isWaitingForStartupLocalTmuxLivenessProbe = false
+    /// Local-tmux liveness decisions read by every restore path in this process.
+    nonisolated static let localTmuxRestoreLiveness = LocalTmuxRestoreLivenessLedger()
     private var deferredInitialMainWindowBootstrapDebugSource: String?
     struct PendingConfiguredShortcutChord {
         let firstStroke: ShortcutStroke
@@ -3862,6 +3867,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         } else {
             startupSessionSnapshot = sanitizedStartupSnapshot
         }
+        beginStartupLocalTmuxLivenessProbeIfNeeded()
+    }
+
+    /// Decides, before restore creates terminals, which persisted local-tmux
+    /// sessions died with their server (for example across a reboot).
+    ///
+    /// Restore must choose between reattaching and resuming a saved agent
+    /// before the terminal starts: typing a resume command into a pane that
+    /// turns out to be attached to a running agent would leak it into the
+    /// agent's input. Any restore that runs before the probe finishes sees
+    /// `unknown` and keeps today's guarded attach.
+    private func beginStartupLocalTmuxLivenessProbeIfNeeded() {
+        guard !isWaitingForStartupLocalTmuxLivenessProbe,
+              let snapshot = startupSessionSnapshot,
+              let probe = localTmuxRestoreLivenessProbe(for: snapshot) else { return }
+        isWaitingForStartupLocalTmuxLivenessProbe = true
+        Task { @MainActor [weak self] in
+            await probe.value
+            guard let self else { return }
+            self.isWaitingForStartupLocalTmuxLivenessProbe = false
+            self.resumeDeferredInitialMainWindowBootstrapIfNeeded()
+        }
+    }
+
+    /// Probes a snapshot's local-tmux sockets off the main thread and records
+    /// the results in ``localTmuxRestoreLiveness``.
+    ///
+    /// Every restore entry point that builds terminals from a snapshot calls
+    /// this first: startup restore and Reopen Previous Session. The probe
+    /// runs `tmux list-sessions` once per socket with a bounded deadline.
+    ///
+    /// - Returns: The probe task, or `nil` when the snapshot has no local-tmux binding.
+    func localTmuxRestoreLivenessProbe(for snapshot: AppSessionSnapshot) -> Task<Void, Never>? {
+        let bindings = LocalTmuxStartupRestoreBindings(
+            policy: Workspace.makeSessionRestorePolicyService()
+        ).bindings(in: snapshot)
+        guard !bindings.isEmpty else { return nil }
+        let ledger = Self.localTmuxRestoreLiveness
+        return Task { @MainActor in
+            let results = await Task.detached(priority: .userInitiated) {
+                LocalTmuxRestoreLivenessProbe().probe(bindings)
+            }.value
+            ledger.record(results)
+            StartupBreadcrumbLog.append(
+                "session.restore.localTmuxProbe",
+                fields: [
+                    "bindings": String(bindings.count),
+                    "live": String(results.values.filter { $0 == .live }.count),
+                    "ended": String(results.values.filter { $0 == .ended }.count),
+                    "unknown": String(results.values.filter { $0 == .unknown }.count),
+                ]
+            )
+        }
     }
 
     /// Archives the on-disk snapshot and installs the overwrite guard once per
@@ -4211,9 +4269,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         _ snapshot: AppSessionSnapshot,
         shouldActivate: Bool = true
     ) -> Bool {
-        guard let snapshot = SessionPersistencePolicy.pruningCmuxCrashDiagnosticWindows(from: snapshot).snapshot else {
+        guard let snapshot = SessionPersistencePolicy.pruningCmuxCrashDiagnosticWindows(from: snapshot).snapshot,
+              !snapshot.windows.isEmpty else {
             return false
         }
+        // A reopen after a reboot needs the same liveness decision as startup
+        // restore, or every dead local-tmux pane would replay its attach.
+        if let probe = localTmuxRestoreLivenessProbe(for: snapshot) {
+            Task { @MainActor [weak self] in
+                await probe.value
+                _ = self?.applyPreviousSessionSnapshot(snapshot, shouldActivate: shouldActivate)
+            }
+            return true
+        }
+        return applyPreviousSessionSnapshot(snapshot, shouldActivate: shouldActivate)
+    }
+
+    @discardableResult
+    private func applyPreviousSessionSnapshot(
+        _ snapshot: AppSessionSnapshot,
+        shouldActivate: Bool
+    ) -> Bool {
         let snapshotWindows = Array(
             snapshot.windows.prefix(SessionPersistencePolicy.maxWindowsPerSnapshot)
         )
@@ -8426,7 +8502,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 self.didScheduleInitialMainWindowBootstrap = false
                 return
             }
-            if self.isWaitingForStartupCrashRecoveryProbe {
+            if self.isWaitingForStartupCrashRecoveryProbe || self.isWaitingForStartupLocalTmuxLivenessProbe {
                 self.didScheduleInitialMainWindowBootstrap = false
                 if self.deferredInitialMainWindowBootstrapDebugSource == nil {
                     self.deferredInitialMainWindowBootstrapDebugSource = debugSource

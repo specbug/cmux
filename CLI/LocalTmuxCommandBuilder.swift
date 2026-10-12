@@ -1,3 +1,4 @@
+import CMUXAgentLaunch
 import Foundation
 
 /// Validates names before they reach tmux's session-target parser.
@@ -96,17 +97,21 @@ struct LocalTmuxCommandBuilder {
     func newSessionArguments(
         sessionName: String,
         workingDirectory: String,
-        command: String?
+        command: String?,
+        environment: LocalTmuxSessionEnvironment = LocalTmuxSessionEnvironment(environment: [:])
     ) -> [String] {
         // Keep the persistence override and detached creation in one tmux
         // command invocation. A standalone set-option can itself exit when a
         // user's config has `exit-unattached on`, before new-session runs.
+        // The server itself starts from a sanitized environment; the session
+        // receives only cmux's agent-integration allowlist so agents inside it
+        // can report hooks and be checkpointed.
         var arguments = [
             "-S", socketPath,
             "set-option", "-s", "exit-unattached", "off",
             ";",
             "new-session", "-d", "-s", sessionName, "-c", workingDirectory,
-        ]
+        ] + environment.newSessionArguments
         if let command, !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             arguments.append(contentsOf: ["/bin/sh", "-lc", command])
         }
@@ -144,6 +149,12 @@ struct LocalTmuxCommandBuilder {
             binding: binding,
             action: tmuxCommand("kill-session", "-t", binding.sessionID.rawValue)
         )
+    }
+
+    /// Removes a session by exact name. Used only for a session this CLI
+    /// created moments earlier whose identity could not be read back.
+    func killSessionArguments(sessionName: String) -> [String] {
+        ["-S", socketPath, "kill-session", "-t", exactTarget(sessionName)]
     }
 
     private var sessionBindingFormat: String {

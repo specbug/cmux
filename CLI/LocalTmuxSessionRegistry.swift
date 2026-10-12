@@ -13,6 +13,17 @@ struct LocalTmuxSessionRecord: Codable, Equatable, Sendable {
     var surfaceID: String?
     var createdAt: TimeInterval
     var updatedAt: TimeInterval
+    /// Dead sessions this record's session replaced during cold recovery,
+    /// oldest first. Every terminal that still holds one of these bindings
+    /// converges on this record instead of creating another replacement.
+    /// Absent in records written before recovery existed.
+    var recoveredFrom: [RecoveredSession]?
+
+    /// One tmux session identity that no longer exists.
+    struct RecoveredSession: Codable, Equatable, Hashable, Sendable {
+        let serverID: UUID
+        let sessionID: String
+    }
 
     init(
         id: UUID = UUID(),
@@ -24,7 +35,8 @@ struct LocalTmuxSessionRecord: Codable, Equatable, Sendable {
         workspaceTitle: String? = nil,
         surfaceID: String? = nil,
         createdAt: TimeInterval = Date.now.timeIntervalSince1970,
-        updatedAt: TimeInterval = Date.now.timeIntervalSince1970
+        updatedAt: TimeInterval = Date.now.timeIntervalSince1970,
+        recoveredFrom: [RecoveredSession]? = nil
     ) {
         self.id = id
         self.name = name
@@ -36,6 +48,7 @@ struct LocalTmuxSessionRecord: Codable, Equatable, Sendable {
         self.surfaceID = surfaceID
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.recoveredFrom = recoveredFrom
     }
 }
 
@@ -102,6 +115,11 @@ struct LocalTmuxSessionRegistry {
 
     var lockURL: URL {
         rootURL.appendingPathComponent("sessions.lock", isDirectory: false)
+    }
+
+    /// Serializes cold recovery across terminals of the same dead session.
+    var recoveryLockURL: URL {
+        rootURL.appendingPathComponent("recovery.lock", isDirectory: false)
     }
 
     /// The one tmux server socket owned by this profile.
@@ -227,6 +245,27 @@ struct LocalTmuxSessionRegistry {
         guard info.st_uid == getuid(), mode & 0o077 == 0, isDirectory == expectedDirectory else {
             throw LocalTmuxRegistryError.insecurePath(path)
         }
+    }
+
+    /// Runs `body` while holding the profile's recovery lock.
+    ///
+    /// Cold recovery reads the registry, may create a tmux session, and
+    /// rebinds a record. Holding one lock across those steps makes every
+    /// terminal of the same dead session converge on one replacement. The
+    /// registry's own lock is still taken by each read and write inside.
+    func withRecoveryLock<T>(_ body: () throws -> T) throws -> T {
+        try ensureSecureStorage()
+        let descriptor = open(recoveryLockURL.path, O_CREAT | O_RDWR | O_NOFOLLOW, mode_t(0o600))
+        guard descriptor >= 0 else {
+            throw LocalTmuxRegistryError.cannotLock(recoveryLockURL.path)
+        }
+        defer { close(descriptor) }
+        try validateSecurePath(recoveryLockURL.path, expectedDirectory: false)
+        guard flock(descriptor, LOCK_EX) == 0 else {
+            throw LocalTmuxRegistryError.cannotLock(recoveryLockURL.path)
+        }
+        defer { _ = flock(descriptor, LOCK_UN) }
+        return try body()
     }
 
     private func withLockedState<T>(

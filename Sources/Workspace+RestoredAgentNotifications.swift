@@ -20,6 +20,11 @@ extension Workspace {
     nonisolated static func restoredPanelHostedLocalAgent(_ panelSnapshot: SessionPanelSnapshot) -> Bool {
         guard let terminal = panelSnapshot.terminal else { return false }
         guard terminal.isRemoteTerminal != true, terminal.remotePTYSessionID == nil else { return false }
+        // A pane that reattaches to its local-tmux or local-zellij owner keeps
+        // the agent that was running inside it.
+        guard makeSessionRestorePolicyService()
+            .localPersistentSessionRestore(terminal.tmuxStartCommand)
+            .attachCommand == nil else { return false }
         return terminal.resumeBinding != nil || terminal.agent != nil
     }
 

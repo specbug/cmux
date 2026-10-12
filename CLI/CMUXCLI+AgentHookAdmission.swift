@@ -127,6 +127,8 @@ extension CMUXCLI {
     static let agentHookRouteSnapshotEnvironmentKey =
         AgentHookDeliveryPolicy.routeSnapshotEnvironmentKey
     private static let agentHookRouteResolutionTimeoutSeconds: TimeInterval = 0.2
+    /// One `tmux display-message` against the profile server.
+    private static let localTmuxHookRouteTimeoutSeconds: TimeInterval = 1
     static let maximumRelayAgentHookPayloadBytes = 4 * 1_024
     static let maximumRelayAgentHookEncodedPayloadBytes = 8 * 1_024
     static let relayClaudeForkSessionPayloadKey = "_cmux_claude_fork_session"
@@ -216,6 +218,20 @@ extension CMUXCLI {
         guard client.isRelayBacked else {
             let routeWasAlreadySnapshotted =
                 environment[Self.agentHookRouteSnapshotEnvironmentKey] == "1"
+            // Inside the local-tmux profile server the agent is not on a cmux
+            // PTY, and its inherited CMUX_* identity names whichever surface
+            // created the session. Route by tmux session identity instead, and
+            // never fall back to that inherited identity.
+            // The pane outlives the agent, so this also holds after it exits.
+            if !routeWasAlreadySnapshotted,
+               case .managed(let binding) = localTmuxHookRouting(
+                   processEnvironment: processEnvironment,
+                   client: client,
+                   socketPassword: socketPassword
+               ) {
+                Self.applyLocalTmuxHookRoute(binding, to: &environment)
+                return environment
+            }
             // An exited agent's PID may already belong to another process.
             if resolvesProcessRoute,
                let processID = environment[pidEnvironmentKey].flatMap(Int.init),
@@ -289,6 +305,118 @@ extension CMUXCLI {
             workspaceId: workspaceID,
             surfaceId: surfaceID
         )
+    }
+
+    /// How a hook running inside tmux is attributed.
+    enum LocalTmuxHookRouting {
+        /// Not in a pane of a cmux local-tmux server; use the ordinary route.
+        case unmanaged
+        /// In a profile pane: the surface showing its session, or `nil` when
+        /// no unique surface does. Never the inherited identity.
+        case managed(CallerTerminalBinding?)
+    }
+
+    /// Classifies a hook environment and resolves a profile pane's surface.
+    ///
+    /// tmux is queried only for panes on the profile socket or carrying the
+    /// profile's session marker, so hooks in unrelated tmux servers pay
+    /// nothing. Ownership is decided by the pane server's own incarnation
+    /// marker, which also covers a custom `CMUX_LOCAL_TMUX_STATE_DIR`.
+    func localTmuxHookRouting(
+        processEnvironment: [String: String],
+        client: SocketClient,
+        socketPassword: String?
+    ) -> LocalTmuxHookRouting {
+        guard !client.isRelayBacked,
+              let paneRoute = LocalTmuxPaneRoute(environment: processEnvironment) else {
+            return .unmanaged
+        }
+        let onProfileSocket = paneRoute.isOnSocket(
+            LocalTmuxSessionRegistry.live(environment: processEnvironment).serverSocketURL.path
+        )
+        guard onProfileSocket || paneRoute.carriesProfileMarker else { return .unmanaged }
+        guard let identity = localTmuxPaneIdentity(paneRoute, processEnvironment: processEnvironment) else {
+            // A pane of the profile socket stays fail-closed even when tmux
+            // cannot answer; anywhere else an unmarked server is not ours.
+            return onProfileSocket ? .managed(nil) : .unmanaged
+        }
+        return .managed(admittedLocalTmuxHookRoute(identity, client: client, socketPassword: socketPassword))
+    }
+
+    /// Writes a resolved local-tmux route, or clears inherited identity.
+    static func applyLocalTmuxHookRoute(
+        _ binding: CallerTerminalBinding?,
+        to environment: inout [String: String]
+    ) {
+        if let binding {
+            environment["CMUX_WORKSPACE_ID"] = binding.workspaceId
+            environment["CMUX_SURFACE_ID"] = binding.surfaceId
+        } else {
+            environment.removeValue(forKey: "CMUX_WORKSPACE_ID")
+            environment.removeValue(forKey: "CMUX_SURFACE_ID")
+        }
+        environment[agentHookRouteSnapshotEnvironmentKey] = "1"
+    }
+
+    /// Reads the pane's session ID and server marker from its own tmux server.
+    private func localTmuxPaneIdentity(
+        _ paneRoute: LocalTmuxPaneRoute,
+        processEnvironment: [String: String]
+    ) -> LocalTmuxPaneRoute.Identity? {
+        let ambient = ProcessInfo.processInfo.environment
+        let tmuxPath: String?
+        if let override = (processEnvironment["CMUX_LOCAL_TMUX_BIN"] ?? ambient["CMUX_LOCAL_TMUX_BIN"])?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !override.isEmpty {
+            tmuxPath = URL(fileURLWithPath: resolvePath(override)).standardizedFileURL.path
+        } else {
+            tmuxPath = LocalTmuxExecutableResolver().resolve(environmentPath: ambient["PATH"])
+        }
+        guard let tmuxPath,
+              FileManager.default.isExecutableFile(atPath: tmuxPath),
+              let result = try? LocalTmuxProcessRunner(
+                  executablePath: tmuxPath,
+                  commandTimeout: Self.localTmuxHookRouteTimeoutSeconds
+              ).run(arguments: paneRoute.displayArguments),
+              result.succeeded else {
+            return nil
+        }
+        return paneRoute.identity(fromDisplayOutput: result.stdout)
+    }
+
+    /// Resolves the cmux surface currently showing a tmux session.
+    ///
+    /// The app matches the session ID and server marker against the attach
+    /// command of its live terminals and answers only for a unique match.
+    private func admittedLocalTmuxHookRoute(
+        _ identity: LocalTmuxPaneRoute.Identity,
+        client: SocketClient,
+        socketPassword: String?
+    ) -> CallerTerminalBinding? {
+        let routeClient = SocketClient(path: client.socketPath)
+        defer { routeClient.close() }
+        guard (try? routeClient.connect()) != nil,
+              (try? authenticateAgentHookRouteClient(
+                  routeClient,
+                  admissionClient: client,
+                  socketPassword: socketPassword
+              )) != nil,
+              let payload = try? routeClient.sendV2(
+                  method: "agent.resolve_delivery_target",
+                  params: [
+                      "local_tmux_server_id": identity.serverID.uuidString.lowercased(),
+                      "local_tmux_session_id": identity.sessionID,
+                  ],
+                  responseTimeout: Self.agentHookRouteResolutionTimeoutSeconds
+              ),
+              payload["source"] as? String == "local_tmux",
+              let workspaceID = normalizedHandleValue(payload["workspace_id"] as? String),
+              UUID(uuidString: workspaceID) != nil,
+              let surfaceID = normalizedHandleValue(payload["surface_id"] as? String),
+              UUID(uuidString: surfaceID) != nil else {
+            return nil
+        }
+        return CallerTerminalBinding(workspaceId: workspaceID, surfaceId: surfaceID)
     }
 
     /// Authenticates the route client with the password the admission client

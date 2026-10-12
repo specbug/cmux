@@ -74,7 +74,8 @@ struct WorkspaceSessionRestorePolicyServiceTests {
         isRunningUnderAutomatedTests: @escaping @Sendable () -> Bool = { false },
         truncateScrollback: @escaping @Sendable (String?) -> String? = { $0 },
         applyingDefaultCodexBaseURL: @escaping @Sendable ([String: String]) -> [String: String] = { $0 },
-        resolvingDefaultCodexModel: @escaping @Sendable ([String: String]) -> String? = { _ in nil }
+        resolvingDefaultCodexModel: @escaping @Sendable ([String: String]) -> String? = { _ in nil },
+        localTmuxLiveness: @escaping @Sendable (LocalTmuxRestoreBinding) -> LocalTmuxRestoreLiveness = { _ in .unknown }
     ) -> WorkspaceSessionRestorePolicyService<FakeBinding> {
         WorkspaceSessionRestorePolicyService(
             applyStoredApproval: applyStoredApproval,
@@ -87,7 +88,8 @@ struct WorkspaceSessionRestorePolicyServiceTests {
                 codexResponsesAPIMode: "responses",
                 applyingDefaultCodexBaseURL: applyingDefaultCodexBaseURL,
                 resolvingDefaultCodexModel: resolvingDefaultCodexModel
-            )
+            ),
+            localTmuxLiveness: localTmuxLiveness
         )
     }
 
@@ -537,6 +539,36 @@ struct WorkspaceSessionRestorePolicyServiceTests {
             .map(quote)
             .joined(separator: " ")
         return "/usr/bin/env ZELLIJ_SOCKET_DIR=\(quote(socketDirectory)) CMUX_LOCAL_ZELLIJ=1 \(quote(executable)) \(arguments)"
+    }
+
+    @Test("an ended local-tmux owner releases the terminal to ordinary restore")
+    func endedLocalTmuxOwnerFallsBack() {
+        let serverID = UUID()
+        let command = localTmuxAttachCommand(
+            executable: "/opt/homebrew/bin/tmux",
+            socket: "/Users/test/.cmux/local-tmux/server.sock",
+            sessionID: "$7",
+            serverID: serverID
+        )
+        let expected = LocalTmuxRestoreBinding(
+            tmuxPath: "/opt/homebrew/bin/tmux",
+            socketPath: "/Users/test/.cmux/local-tmux/server.sock",
+            serverID: serverID,
+            sessionID: "$7"
+        )
+        let ended = makeService(localTmuxLiveness: { $0 == expected ? .ended : .live })
+        #expect(ended.localTmuxRestoreBinding(command) == expected)
+        #expect(ended.localPersistentSessionRestore(command) == .ended(expected))
+        #expect(ended.localPersistentSessionRestore(command).attachCommand == nil)
+        // Capture of a running surface still sees the attach command.
+        #expect(ended.localTmuxStartCommand(command) == command)
+
+        for liveness in [LocalTmuxRestoreLiveness.live, .unknown] {
+            let service = makeService(localTmuxLiveness: { _ in liveness })
+            #expect(service.localPersistentSessionRestore(command) == .attach(command: command))
+        }
+        #expect(ended.localPersistentSessionRestore("tmux attach -t work") == .none)
+        #expect(ended.localPersistentSessionRestore(nil) == .none)
     }
 
     private func localTmuxAttachCommand(

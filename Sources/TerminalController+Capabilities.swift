@@ -346,6 +346,7 @@ extension TerminalController {
             "pane.last",
             "notification.create",
             "notification.create_for_caller", "agent.resolve_delivery_target", "agent.hibernation.session_end",
+            "surface.local_tmux_adopt",
             "notification.create_for_surface",
             "notification.create_for_target",
             "notification.list",

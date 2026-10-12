@@ -1,3 +1,4 @@
+import CMUXAgentLaunch
 import Darwin
 import Foundation
 
@@ -12,6 +13,16 @@ extension CMUXCLI {
         idFormat: CLIIDFormat,
         windowOverride: String? = nil
     ) throws {
+        // Internal verb typed by session restore; not part of the public usage.
+        if commandArgs.first == LocalTmuxRecoveryCommand.subcommand[1] {
+            try runLocalTmuxRecovery(
+                arguments: Array(commandArgs.dropFirst()),
+                client: client,
+                jsonOutput: jsonOutput,
+                idFormat: idFormat
+            )
+            return
+        }
         var effectiveArguments = commandArgs
         if let windowOverride,
            !commandArgs.contains("--window"),
@@ -162,14 +173,19 @@ extension CMUXCLI {
         return true
     }
 
-    private func localTmuxRuntime(
-        registry: LocalTmuxSessionRegistry
+    /// - Parameter tmuxPath: A tmux executable fixed by a persisted attach
+    ///   command (cold recovery); otherwise resolved from the environment.
+    func localTmuxRuntime(
+        registry: LocalTmuxSessionRegistry,
+        tmuxPath fixedTmuxPath: String? = nil
     ) throws -> (path: String, builder: LocalTmuxCommandBuilder, runner: LocalTmuxProcessRunner) {
         try registry.ensureSecureStorage()
         try registry.validateServerSocketIfPresent()
         let environment = ProcessInfo.processInfo.environment
         let path: String?
-        if let override = environment["CMUX_LOCAL_TMUX_BIN"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+        if let fixedTmuxPath {
+            path = fixedTmuxPath
+        } else if let override = environment["CMUX_LOCAL_TMUX_BIN"]?.trimmingCharacters(in: .whitespacesAndNewlines),
            !override.isEmpty {
             path = URL(fileURLWithPath: resolvePath(override)).standardizedFileURL.path
         } else {
@@ -252,7 +268,12 @@ extension CMUXCLI {
 
         let cwd = try requestedCwd ?? localTmuxWorkingDirectory(nil)
         _ = try runner.requireSuccess(
-            builder.newSessionArguments(sessionName: name, workingDirectory: cwd, command: invocation.command),
+            builder.newSessionArguments(
+                sessionName: name,
+                workingDirectory: cwd,
+                command: invocation.command,
+                environment: LocalTmuxSessionEnvironment(environment: ProcessInfo.processInfo.environment)
+            ),
             context: "start"
         )
         let observed = try identityResolver.observedSession(named: name)

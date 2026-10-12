@@ -3166,6 +3166,7 @@ class TerminalController {
             return v2Result(id: id, self.v2NotificationCreateForCaller(params: params))
         case "agent.resolve_delivery_target": return v2Result(id: id, self.v2AgentResolveDeliveryTarget(params: params))
         case "agent.hibernation.session_end": return v2Result(id: id, self.v2AgentHibernationSessionEnd(params: params))
+        case "surface.local_tmux_adopt": return v2Result(id: id, self.v2SurfaceLocalTmuxAdopt(params: params))
         #if DEBUG
         case "debug.cloudtree.rows":
             // The Cloud sidebar's rows from the same builder the sidebar uses, so

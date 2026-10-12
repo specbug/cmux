@@ -256,7 +256,11 @@ extension DockSplitStore {
         )
         guard let terminalSnapshot = snapshot.terminal else { return nil }
         let policy = Workspace.makeSessionRestorePolicyService()
-        let localTmuxStartCommand = policy.localTmuxStartCommand(terminalSnapshot.tmuxStartCommand)
+        // Same rule as workspace restore: an ended local-tmux owner releases
+        // the terminal to the ordinary agent restore path.
+        let localSessionRestore = policy.localPersistentSessionRestore(terminalSnapshot.tmuxStartCommand)
+        let localTmuxStartCommand = localSessionRestore.attachCommand
+        let persistedTmuxStartCommand = localSessionRestore.hasEnded ? nil : terminalSnapshot.tmuxStartCommand
         let restorableAgent = localTmuxStartCommand == nil
             ? Workspace.restorableAgentForSessionRestore(
                 terminalSnapshot.agent,
@@ -411,7 +415,7 @@ extension DockSplitStore {
                 !stablePanelHasLiveProcess &&
                 !suppressesResumeForBackgroundSession &&
                 restorableAgent == nil && bindingLaunch == nil
-                ? policy.restorableTmuxStartCommand(terminalSnapshot.tmuxStartCommand)
+                ? policy.restorableTmuxStartCommand(persistedTmuxStartCommand)
                 : nil)
         let tmuxLauncher = tmuxStartCommand.flatMap {
             OneShotTerminalLauncherStore().writeStartupCommand(
@@ -434,7 +438,11 @@ extension DockSplitStore {
             && !agentSessionAlreadyActive
             ? restorableAgent?.resumeStartupInput(
                 restoringWorkingDirectory: resumeSessionWorkingDirectory
-            ).map(WorkspaceSurfaceResumeStartupLaunch.input)
+            ).map { input in
+                // An ended local-tmux session is recreated around the resume.
+                Workspace.localTmuxRecoveryLaunch(localSessionRestore, restorableAgent: restorableAgent)
+                    ?? .input(input)
+            }
             : nil
         // Build the candidate before arming the gate. A binding that is
         // disabled, unapproved, or cannot render a command must start as an
@@ -469,7 +477,12 @@ extension DockSplitStore {
         let initialInput = bindingLaunch?.initialInput ??
             agentLaunch?.initialInput ??
             deferredAgentResumeStartupInput ??
-            claudeBackgroundAttach?.startupInput
+            claudeBackgroundAttach?.startupInput ??
+            (localSessionRestore.hasEnded
+                ? LocalTmuxSessionEndedNotice(
+                    hasAgentCheckpoint: restorableAgent != nil
+                ).startupInput(dialect: .loginShell)
+                : nil)
         let willRunAgentInput =
             agentLaunch?.initialInput != nil ||
             (bindingLaunch?.initialInput != nil && resumeBinding?.isAgentHookBinding == true) ||

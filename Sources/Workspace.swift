@@ -471,10 +471,11 @@ extension Workspace {
             sessionRestorePolicy.localTmuxStartCommand($0.surface.debugTmuxStartCommand())
         }
         let indexedRestorableAgent = restorableAgentObservation?.snapshot
+        // A local-tmux surface keeps its agent checkpoint too. Restore ignores
+        // it while the tmux owner is alive and uses it only after that owner
+        // is provably gone, to resume the same conversation in a new process.
         let compatibleIndexedRestorableAgent = indexedRestorableAgent.flatMap {
-            localTmuxStartCommand == nil
-                ? Self.restorableAgentForSessionRestore($0, resumeBinding: resumeBinding)
-                : nil
+            Self.restorableAgentForSessionRestore($0, resumeBinding: resumeBinding)
         }
         let reconciledIndexedRestorableAgent = restoredAgentLifecycle
             .reconcileSnapshotWithQueuedRestoreIntent(
@@ -522,7 +523,7 @@ extension Workspace {
             }
             : nil
         let restoredAgentCompleted = restoredAgentResumeStatesByPanelId[panelId] == .completedAgentExit
-        let effectiveRestorableAgent = localTmuxStartCommand == nil && !restoredAgentCompleted
+        let effectiveRestorableAgent = !restoredAgentCompleted
             ? Self.restorableAgentForSessionRestore(
                 restoredAgentLifecycle.reconcileSnapshotWithQueuedRestoreIntent(
                     panelId: panelId,
@@ -689,11 +690,16 @@ extension Workspace {
                         lastActivityAt: $0.lastActivityAt.timeIntervalSince1970
                     )
                 } : nil,
-                resumeBinding: localTmuxStartCommand == nil ? resumeBinding : nil,
+                // The surface's own process is the tmux client, so a
+                // process-detected binding would only describe that client.
+                // Keep agent-hook identity, which describes the agent inside.
+                resumeBinding: localTmuxStartCommand == nil
+                    ? resumeBinding
+                    : resumeBinding.flatMap { $0.isAgentHookBinding ? $0 : nil },
                 textBoxDraft: terminalPanel.sessionTextBoxDraftSnapshot(),
                 isRemoteTerminal: activeRemoteTerminalSurfaceIds.contains(panelId),
                 remotePTYSessionID: remotePTYSessionIDForSnapshot(panelId: panelId),
-                wasAgentRunning: localTmuxStartCommand == nil ? agentWasRunning : nil,
+                wasAgentRunning: agentWasRunning,
                 hasReceivedExplicitInput: terminalPanel.hasReceivedExplicitInput,
                 claudeBackgroundViewer: localTmuxStartCommand == nil
                     ? claudeBackgroundViewerForSnapshot(panelId: panelId, terminal: terminalPanel)
@@ -1185,6 +1191,27 @@ extension Workspace {
         return restorableAgent
     }
 
+    /// The typed launch that recreates an ended local-tmux session and resumes
+    /// its saved agent inside it, or `nil` to keep the plain resume.
+    nonisolated static func localTmuxRecoveryLaunch(
+        _ localSessionRestore: LocalPersistentSessionRestore,
+        restorableAgent: SessionRestorableAgentSnapshot?
+    ) -> SurfaceResumeStartupLaunch? {
+        guard case .ended(let binding) = localSessionRestore,
+              let restorableAgent,
+              let recovery = LocalTmuxRecoveryCommand(
+                  tmuxPath: binding.tmuxPath,
+                  socketPath: binding.socketPath,
+                  serverID: binding.serverID,
+                  sessionID: binding.sessionID,
+                  agentKind: restorableAgent.kind.rawValue,
+                  checkpointID: restorableAgent.sessionId
+              ) else {
+            return nil
+        }
+        return .input(recovery.typedInput)
+    }
+
     nonisolated private static func normalizedResumeBindingValue(_ value: String?) -> String? {
         guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
               !trimmed.isEmpty else {
@@ -1596,8 +1623,16 @@ extension Workspace {
             if restoresDeviceProjection {
                 return restoreDeviceDisplayPanel(snapshot, in: paneId)
             }
-            let localTmuxStartCommand = sessionRestorePolicy
-                .localTmuxStartCommand(snapshot.terminal?.tmuxStartCommand)
+            // A live (or undecided) local-tmux owner keeps the attach command
+            // authoritative. Once its server incarnation is provably gone, the
+            // terminal restores like an ordinary one so a saved agent
+            // checkpoint can resume the exact conversation in a fresh shell.
+            let localSessionRestore = sessionRestorePolicy
+                .localPersistentSessionRestore(snapshot.terminal?.tmuxStartCommand)
+            let localTmuxStartCommand = localSessionRestore.attachCommand
+            let persistedTmuxStartCommand = localSessionRestore.hasEnded
+                ? nil
+                : snapshot.terminal?.tmuxStartCommand
             let snapshotRestorableAgent = localTmuxStartCommand == nil ? snapshot.terminal?.agent : nil
             let persistedResumeBinding = localTmuxStartCommand == nil ? snapshot.terminal?.resumeBinding : nil
             let restorableAgent = Self.restorableAgentForSessionRestore(
@@ -1786,7 +1821,7 @@ extension Workspace {
                     !stablePanelHasLiveProcess &&
                     !suppressesResumeForBackgroundSession &&
                     restorableAgent == nil && restoredBindingLaunch == nil
-                    ? sessionRestorePolicy.restorableTmuxStartCommand(snapshot.terminal?.tmuxStartCommand)
+                    ? sessionRestorePolicy.restorableTmuxStartCommand(persistedTmuxStartCommand)
                     : nil)
             let restoredTmuxStartupScript = restorableTmuxStartCommand.flatMap {
                 OneShotTerminalLauncherStore().writeStartupCommand(
@@ -1847,7 +1882,7 @@ extension Workspace {
                 )
                 return remoteRestoreClaim == nil
             }()
-            let restoredAgentResumeLaunch: SurfaceResumeStartupLaunch? =
+            let plainAgentResumeLaunch: SurfaceResumeStartupLaunch? =
                 if shouldAutoResumeAgent && restorableAgentCanAutoResume,
                    restoredHibernation == nil && restoredBindingLaunch == nil
                     && !agentSessionAlreadyActive {
@@ -1865,6 +1900,14 @@ extension Workspace {
                 } else {
                     nil
                 }
+            // A conversation whose local-tmux server is gone resumes inside a
+            // recreated session, so it survives the next quit or crash too.
+            let restoredAgentResumeLaunch = plainAgentResumeLaunch.map { launch in
+                Self.localTmuxRecoveryLaunch(
+                    localSessionRestore,
+                    restorableAgent: restoresRemoteWorkspaceTerminalSnapshot ? nil : restorableAgent
+                ) ?? launch
+            }
             if restoredAgentResumeLaunch == nil,
                let unusedClaim = remoteRestoreClaim,
                let restorableAgent {
@@ -1935,7 +1978,12 @@ extension Workspace {
                 ? (restoredBindingLaunch?.initialInput ??
                     restoredAgentResumeLaunch?.initialInput ??
                     deferredAgentResumeStartupInput ??
-                    claudeBackgroundAttach?.startupInput)
+                    claudeBackgroundAttach?.startupInput ??
+                    (localSessionRestore.hasEnded
+                        ? LocalTmuxSessionEndedNotice(
+                            hasAgentCheckpoint: restorableAgent != nil
+                        ).startupInput(dialect: .loginShell)
+                        : nil))
                 : nil
             let startupHandlesWorkingDirectory =
                 restoredTmuxStartupScript != nil ||
@@ -3659,7 +3707,10 @@ final class Workspace: Identifiable, ObservableObject, FilePreviewTabMetadataHos
                 resolvingDefaultCodexModel: { environment in
                     HermesAgentCodexEnvironment.defaultCodexModel(environment: environment)
                 }
-            )
+            ),
+            localTmuxLiveness: { binding in
+                AppDelegate.localTmuxRestoreLiveness.liveness(for: binding)
+            }
         )
     }
 
